@@ -10,7 +10,9 @@ dependencies = [
     "langchain-google-genai>=2.1.6",
     "langchain-qdrant>=0.2.0",
     "langchain-text-splitters>=0.3.8",
+    "nltk>=3.9.1",
     "pypdf>=5.7.0",
     "python-dotenv>=1.1.1",
+    "scikit-learn>=1.7.0",
     "streamlit>=1.46.1",
 ]

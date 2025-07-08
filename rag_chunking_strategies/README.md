@@ -70,7 +70,7 @@ curl -Ls https://astral.sh/uv/install.sh | sh
 git clone <repository-url>
 cd rag_chunking_strategies
 uv venv
-uv add streamlit langchain langchain-community langchain-text-splitters langchain-google-genai langchain-qdrant python-dotenv pypdf
+uv add streamlit langchain langchain-community langchain-text-splitters langchain-google-genai langchain-qdrant python-dotenv pypdf nltk scikit-learn
 ```
 
 ### 2. **Environment Setup**
@@ -81,21 +81,10 @@ Create a `.env` file in the project root:
 GEMINI_API_KEY=your_google_gemini_api_key_here
 ```
 
-### 3. **Start Qdrant Vector Database**
+### 3. **Run the Streamlit App**
 
 ```bash
-docker compose -f docker-compose.db.yml up -d
-```
-
-**Qdrant URLs:**
-
-* **API:** [http://localhost:6333](http://localhost:6333)
-* **Dashboard:** [http://localhost:6333/dashboard#/welcome](http://localhost:6333/dashboard#/welcome)
-
-### 4. **Run the Streamlit App**
-
-```bash
-uv run app.py
+uv run streamlit run app.py
 ```
 
 ---
