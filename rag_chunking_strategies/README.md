@@ -1,5 +1,9 @@
 # 📄 RAG Chunking Explorer
 
+## 🖼️ Application Output
+
+![RAG Chunking Explorer](output.png)
+
 An interactive Streamlit app to **experiment with chunking strategies** for documents before sending them through a Retrieval-Augmented Generation (RAG) pipeline. Supports chunk previews, metadata, and embeddings storage via Qdrant using Gemini embeddings.
 
 ---
@@ -66,7 +70,7 @@ curl -Ls https://astral.sh/uv/install.sh | sh
 git clone <repository-url>
 cd rag_chunking_strategies
 uv venv
-uv add streamlit langchain langchain-community langchain-text-splitters langchain-google-genai langchain-qdrant python-dotenv
+uv add streamlit langchain langchain-community langchain-text-splitters langchain-google-genai langchain-qdrant python-dotenv pypdf
 ```
 
 ### 2. **Environment Setup**
