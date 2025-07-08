@@ -21,7 +21,7 @@ pdf_file = st.sidebar.file_uploader("Upload a PDF file", type=["pdf"])
 chunk_size = st.sidebar.slider("Chunk Size", 100, 2000, step=100, value=1000)
 chunk_overlap = st.sidebar.slider("Chunk Overlap", 0, 500, step=50, value=200)
 
-strategy = st.sidebar.selectbox("Chunking Strategies", [
+strategy = st.sidebar.selectbox("Chunking Strategy", [
     "Recursive (Fixed Size)",
     "Markdown-aware",
     "Semantic"

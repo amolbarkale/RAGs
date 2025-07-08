@@ -73,6 +73,12 @@ uv venv
 uv add streamlit langchain langchain-community langchain-text-splitters langchain-google-genai langchain-qdrant python-dotenv pypdf nltk scikit-learn
 ```
 
+Open a Python shell or a new cell in your code and run:
+```bash
+import nltk
+nltk.download('punkt')
+```
+
 ### 2. **Environment Setup**
 
 Create a `.env` file in the project root:
