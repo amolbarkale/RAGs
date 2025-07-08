@@ -11,7 +11,7 @@ mkdir plagiarism-detector
 cd plagiarism-detector
 
 # Add dependencies
-uv add streamlit sentence-transformers scikit-learn plotly pandas numpy
+uv add streamlit sentence-transformers scikit-learn plotly pandas numpy matplotlib
 
 # Save the main.py file and run
 uv run streamlit run main.py
