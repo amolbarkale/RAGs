@@ -3,6 +3,9 @@ from langchain_google_genai import GoogleGenerativeAIEmbeddings
 from langchain_qdrant import QdrantVectorStore
 from typing import List
 import os
+from dotenv import load_dotenv
+
+load_dotenv()
 
 def create_documents_from_chunks(chunks: List[str]) -> List[Document]:
     """Wrap raw text chunks into LangChain Document objects"""
@@ -17,7 +20,7 @@ def embed_and_store(
     """Embeds documents and stores them into Qdrant vector DB"""
     embedding_model = GoogleGenerativeAIEmbeddings(
         model="models/embedding-001",
-        google_api_key=api_key
+        google_api_key=os.getenv("GEMINI_API_KEY")
     )
 
     vectorstore = QdrantVectorStore.from_documents(
