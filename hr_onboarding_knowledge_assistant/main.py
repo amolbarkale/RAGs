@@ -38,12 +38,13 @@ embedding_model = GoogleGenerativeAIEmbeddings(
 
 # Ingest documents into Qdrant
 print("Ingesting docs into Qdrant...")
-vector_store = QdrantVectorStore.from_existing_collection(
-    documents=split_docs,
-    url="http://localhost:6333",
-    collection_name="hr_onboarding_collection",
-    embedding=embedding_model,
-)
+# Uncomment the following lines to create a new collection in Qdrant
+# vector_store = QdrantVectorStore.from_documents(
+#     documents=split_docs,
+#     url="http://localhost:6333",
+#     collection_name="hr_onboarding_collection",
+#     embedding=embedding_model,
+# )
 print("✅ Ingestion complete!")
 
 # Now create retriever
@@ -71,11 +72,10 @@ if query:
             )
 
             # Load retriever from existing Qdrant collection
-            retriever = QdrantVectorStore.from_documents(
+            retriever = QdrantVectorStore.from_existing_collection(
                 url="http://localhost:6333",
-                collection_name="hr_collection",
+                collection_name="hr_onboarding_collection",
                 embedding=embedding_model,
-                documents=split_docs, # this is missing
             )
 
             # Search similar chunks
