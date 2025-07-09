@@ -1,4 +1,3 @@
-# app.py
 import streamlit as st
 from pathlib import Path
 from engine.load_and_split import load_pdf, get_chunks
