@@ -16,3 +16,8 @@ dependencies = [
     "qdrant-client>=1.14.3",
     "streamlit>=1.46.1",
 ]
+
+[tool.uv.workspace]
+members = [
+    "chat-with-your-lecture",
+]
