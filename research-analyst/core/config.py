@@ -39,9 +39,18 @@ class Settings(BaseSettings):
     # ==============================================
     # Database Configuration
     # ==============================================
+    # Traditional Database (SQLAlchemy)
+    database_url: str = "sqlite:///./data/research_assistant.db"
+    database_echo: bool = False  # Set to True to see SQL queries
+    
+    # Vector Database (Qdrant)
     qdrant_url: str = "http://localhost:6333"
     qdrant_api_key: Optional[str] = None
+    qdrant_collection_name: str = "research_documents"
+    
+    # Cache Database (Redis)
     redis_url: str = "redis://localhost:6379"
+    redis_password: Optional[str] = None
     
     # ==============================================
     # LangChain AI Models Configuration
