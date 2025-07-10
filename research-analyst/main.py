@@ -40,7 +40,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from services.database import db_manager, get_db, get_vector_db
 from services.vector_store import VectorStoreService, create_vector_store
 from services.models import DocumentDBModel, DocumentChunkDBModel
-from services.document_processor import DocumentProcessor, create_document_processor, detect_file_type
+from services.document_processor import ProductionDocumentProcessor, create_document_processor, detect_file_type
 
 
 # ==============================================
@@ -68,8 +68,8 @@ async def lifespan(app: FastAPI):
     qdrant_client = db_manager.get_vector_client()
     vector_store = await create_vector_store(qdrant_client)
     
-    # Initialize document processor
-    print("🔧 Initializing document processor...")
+    # Initialize production document processor
+    print("🚀 Initializing production document processor...")
     document_processor = await create_document_processor(vector_store)
     
     # Store services in app state for access in endpoints

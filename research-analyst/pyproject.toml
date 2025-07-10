@@ -36,6 +36,8 @@ dependencies = [
     "python-docx>=0.8.11",
     "unstructured[docx]>=0.10.0",
     "beautifulsoup4>=4.12.0",
+    # Token Processing (for hierarchical chunking)
+    "tiktoken>=0.5.0",
     # LangChain Reranking (FlashRank integration)
     "flashrank>=0.2.0",
     # Caching & Performance
