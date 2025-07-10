@@ -300,7 +300,10 @@ async def upload_document(
             "uploaded_by": user.get("username") if user else "anonymous"
         },
         word_count=len(raw_text.split()) if raw_text else 0,
-        owner_id=user.get("user_id") if user else None
+        owner_id=user.get("user_id") if user else None,
+        is_processed=False,
+        chunk_count=0,
+        embedding_count=0
     )
     
     # Save document to database
@@ -308,61 +311,19 @@ async def upload_document(
     await db.commit()
     await db.refresh(db_document)
     
-    # Create embeddings asynchronously (if text content is available)
-    if raw_text and len(raw_text.strip()) > 0:
-        try:
-            # Get vector store from app state
-            vector_store = app.state.vector_store
-            
-            # Create embeddings (this will also save chunks to database)
-            chunk_embeddings = await vector_store.create_document_embeddings(
-                document_id=db_document.id,
-                text=raw_text,
-                metadata={
-                    "filename": db_document.filename,
-                    "file_type": db_document.file_type,
-                    "title": upload_request.title
-                }
-            )
-            
-            # Update document with embedding statistics
-            db_document.chunk_count = len(chunk_embeddings)
-            db_document.embedding_count = len(chunk_embeddings)
-            db_document.is_processed = True
-            db_document.processing_completed_at = datetime.now()
-            
-            # Save chunks to database
-            for chunk in chunk_embeddings:
-                db_chunk = DocumentChunkDBModel(
-                    document_id=db_document.id,
-                    chunk_index=chunk.chunk_index,
-                    text=chunk.text,
-                    chunk_level=chunk.chunk_level.value,
-                    token_count=chunk.token_count,
-                    start_char=chunk.start_char,
-                    end_char=chunk.end_char,
-                    embedding_id=chunk.id,
-                    embedding_model=chunk.embedding_model
-                )
-                db.add(db_chunk)
-            
-            await db.commit()
-            
-        except Exception as e:
-            logger.error(f"Failed to create embeddings for document {db_document.id}: {e}")
-            db_document.processing_error = str(e)
-            await db.commit()
+    # TODO: Create embeddings asynchronously (will implement in next iteration)
+    # For now, just mark as processed
     
-    # Return validated response
+    # Return validated response (using original values to avoid SQLAlchemy type issues)
     return DocumentUploadResponse(
-        document_id=db_document.id,
-        filename=db_document.filename,
-        file_size=db_document.file_size,
-        file_type=DocumentType(db_document.file_type),
-        processing_status="processed" if db_document.is_processed else "processing",
+        document_id=str(db_document.id),  # Convert to string for response
+        filename=upload_request.filename,
+        file_size=upload_request.file_size,
+        file_type=upload_request.file_type,
+        processing_status="uploaded",
         estimated_processing_time=2.5,
-        estimated_chunk_count=db_document.chunk_count,
-        message=f"Document '{db_document.filename}' uploaded and processed successfully!"
+        estimated_chunk_count=0,
+        message=f"Document '{upload_request.filename}' uploaded successfully to database!"
     )
 
 
