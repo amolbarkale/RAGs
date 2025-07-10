@@ -31,6 +31,7 @@ class DocumentType(str, Enum):
     PDF = "pdf"
     TXT = "txt"
     DOCX = "docx"
+    CSV = "csv"
     MARKDOWN = "markdown"
 
 

@@ -32,11 +32,15 @@ from core.models import (
 )
 from utils.logger import setup_logging
 
+# Set up logging
+logger = logging.getLogger(__name__)
+
 # Database imports
 from sqlalchemy.ext.asyncio import AsyncSession
 from services.database import db_manager, get_db, get_vector_db
 from services.vector_store import VectorStoreService, create_vector_store
 from services.models import DocumentDBModel, DocumentChunkDBModel
+from services.document_processor import DocumentProcessor, create_document_processor, detect_file_type
 
 
 # ==============================================
@@ -64,8 +68,13 @@ async def lifespan(app: FastAPI):
     qdrant_client = db_manager.get_vector_client()
     vector_store = await create_vector_store(qdrant_client)
     
-    # Store vector store in app state for access in endpoints
+    # Initialize document processor
+    print("🔧 Initializing document processor...")
+    document_processor = await create_document_processor(vector_store)
+    
+    # Store services in app state for access in endpoints
     app.state.vector_store = vector_store
+    app.state.document_processor = document_processor
     
     # Check database health
     health = await db_manager.health_check()
@@ -248,12 +257,21 @@ async def upload_document(
     if tags:
         parsed_tags = [tag.strip() for tag in tags.split(",") if tag.strip()]
     
+    # Detect file type from extension
+    try:
+        detected_file_type = detect_file_type(file.filename or "unknown")
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Unsupported file type: {str(e)}"
+        )
+
     # Create a request model to validate all parameters automatically
     try:
         # Let Pydantic handle ALL validation automatically!
         upload_request = DocumentUploadRequest(
             filename=file.filename or "unknown",
-            file_type=DocumentType.PDF,  # TODO: Detect from file extension
+            file_type=detected_file_type,  # ✅ Now detects from extension
             file_size=len(content),
             title=title,
             description=description,
@@ -277,14 +295,7 @@ async def upload_document(
     import hashlib
     content_hash = hashlib.sha256(content).hexdigest()
     
-    # Extract text content (basic implementation)
-    if upload_request.file_type == DocumentType.TXT:
-        raw_text = content.decode('utf-8')
-    else:
-        # For PDF/DOCX, we'll implement proper extraction later
-        raw_text = "Text extraction not yet implemented for this file type."
-    
-    # Create database document record
+    # Create database document record FIRST (without processing)
     db_document = DocumentDBModel(
         filename=upload_request.filename,
         original_filename=file.filename or "unknown",
@@ -292,16 +303,17 @@ async def upload_document(
         file_size=upload_request.file_size,
         file_path=file_path,
         content_hash=content_hash,
-        raw_text=raw_text,
+        raw_text=None,  # Will be filled during processing
         metadata={
             "title": upload_request.title,
             "description": upload_request.description,
             "tags": upload_request.tags,
             "uploaded_by": user.get("username") if user else "anonymous"
         },
-        word_count=len(raw_text.split()) if raw_text else 0,
+        word_count=0,  # Will be calculated during processing
         owner_id=user.get("user_id") if user else None,
         is_processed=False,
+        processing_started_at=datetime.now(),  # Mark processing as started
         chunk_count=0,
         embedding_count=0
     )
@@ -311,20 +323,51 @@ async def upload_document(
     await db.commit()
     await db.refresh(db_document)
     
-    # TODO: Create embeddings asynchronously (will implement in next iteration)
-    # For now, just mark as processed
+    # ✅ NOW PROCESS THE DOCUMENT THROUGH THE PIPELINE
+    logger.info(f"🚀 Starting document processing for {db_document.id}")
     
-    # Return validated response (using original values to avoid SQLAlchemy type issues)
-    return DocumentUploadResponse(
-        document_id=str(db_document.id),  # Convert to string for response
-        filename=upload_request.filename,
-        file_size=upload_request.file_size,
-        file_type=upload_request.file_type,
-        processing_status="uploaded",
-        estimated_processing_time=2.5,
-        estimated_chunk_count=0,
-        message=f"Document '{upload_request.filename}' uploaded successfully to database!"
-    )
+    try:
+        # Get document processor from app state
+        document_processor = app.state.document_processor
+        
+        # Process document through complete pipeline
+        processing_result = await document_processor.process_document(
+            document_id=str(db_document.id),
+            file_path=file_path,
+            file_type=upload_request.file_type,
+            db=db
+        )
+        
+        logger.info(f"✅ Document processing completed: {processing_result}")
+        
+        # Return SUCCESS response with real processing data
+        return DocumentUploadResponse(
+            document_id=str(db_document.id),
+            filename=upload_request.filename,
+            file_size=upload_request.file_size,
+            file_type=upload_request.file_type,
+            processing_status="completed",  # ✅ Real status
+            estimated_processing_time=processing_result.get("processing_time", 0.0),
+            estimated_chunk_count=processing_result.get("chunk_count", 0),
+            message=f"Document '{upload_request.filename}' processed successfully! "
+                   f"Generated {processing_result.get('chunk_count', 0)} chunks and "
+                   f"{processing_result.get('embedding_count', 0)} embeddings."
+        )
+        
+    except Exception as e:
+        logger.error(f"❌ Document processing failed: {e}")
+        
+        # Return FAILED response with error details
+        return DocumentUploadResponse(
+            document_id=str(db_document.id),
+            filename=upload_request.filename,
+            file_size=upload_request.file_size,
+            file_type=upload_request.file_type,
+            processing_status="failed",
+            estimated_processing_time=0.0,
+            estimated_chunk_count=0,
+            message=f"Document upload succeeded but processing failed: {str(e)}"
+        )
 
 
 @app.get("/documents", response_model=DocumentListResponse)

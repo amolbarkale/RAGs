@@ -31,9 +31,10 @@ dependencies = [
     "sentence-transformers>=2.2.0",
     # Web Search (Tavily only)
     "tavily-python>=0.3.0",
-    # Document Processing
+    # Document Processing (LangChain Loaders)
     "pypdf>=3.17.0",
     "python-docx>=0.8.11",
+    "unstructured[docx]>=0.10.0",
     "beautifulsoup4>=4.12.0",
     # LangChain Reranking (FlashRank integration)
     "flashrank>=0.2.0",

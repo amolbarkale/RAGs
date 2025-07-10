@@ -18,6 +18,7 @@ dependencies = [
     "qdrant-client>=1.14.3",
     "sqlalchemy>=2.0.41",
     "streamlit>=1.46.1",
+    "unstructured[docx]>=0.18.3",
 ]
 
 [tool.uv.workspace]
