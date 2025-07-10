@@ -34,6 +34,8 @@ class Settings(BaseSettings):
     # API Keys (Keep these secret!)
     # ==============================================
     gemini_api_key: Optional[str] = None
+    google_api_key: Optional[str] = None  # For Google Generative AI embeddings
+    openai_api_key: Optional[str] = None  # For OpenAI embeddings
     tavily_api_key: Optional[str] = None  # Updated to use Tavily instead of Serper
     
     # ==============================================
@@ -136,12 +138,17 @@ class Settings(BaseSettings):
         
         if not self.gemini_api_key:
             missing_keys.append("GEMINI_API_KEY")
+        if not self.google_api_key:
+            missing_keys.append("GOOGLE_API_KEY")
+        if not self.openai_api_key:
+            missing_keys.append("OPENAI_API_KEY")
         if not self.tavily_api_key:
             missing_keys.append("TAVILY_API_KEY")
             
         if missing_keys:
             print(f"⚠️  Warning: Missing API keys: {', '.join(missing_keys)}")
             print("Some features may not work properly.")
+            print("🔧 Available providers will be used when API keys are missing.")
             
     def get_database_url(self) -> str:
         """Get the database connection URL."""

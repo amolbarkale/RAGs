@@ -8,23 +8,34 @@ For beginners: This is where we store and search text embeddings for RAG.
 import logging
 import asyncio
 import time
-from typing import List, Dict, Any, Optional, Tuple
+from typing import List, Dict, Any, Optional, Tuple, Union
 from datetime import datetime
 import uuid
 import numpy as np
 
-# LangChain imports
-from langchain.embeddings import HuggingFaceEmbeddings
-from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain.docstore.document import Document as LangChainDocument
+# Modern LangChain imports
+from langchain_text_splitters import RecursiveCharacterTextSplitter
+from langchain_core.documents import Document as LangChainDocument
+from langchain_core.embeddings import Embeddings
+from langchain_community.embeddings import HuggingFaceEmbeddings
+from langchain_qdrant import QdrantVectorStore
+
+# Optional modern embedding providers
+try:
+    from langchain_google_genai import GoogleGenerativeAIEmbeddings
+    GOOGLE_AVAILABLE = True
+except ImportError:
+    GOOGLE_AVAILABLE = False
+
+try:
+    from langchain_openai import OpenAIEmbeddings
+    OPENAI_AVAILABLE = True
+except ImportError:
+    OPENAI_AVAILABLE = False
 
 # Qdrant imports
 from qdrant_client import QdrantClient
-from qdrant_client.models import (
-    Distance, VectorParams, PointStruct, 
-    Filter, FieldCondition, MatchValue, SearchParams,
-    UpdateResult, UpdateStatus
-)
+from qdrant_client.models import Distance, VectorParams
 
 # Core imports
 from core.config import settings
@@ -36,24 +47,25 @@ logger = logging.getLogger(__name__)
 
 class VectorStoreService:
     """
-    Vector store service for managing embeddings and similarity search.
+    Modern vector store service using LangChain's QdrantVectorStore.
     
-    For beginners: This class handles all vector operations - creating embeddings,
-    storing them, and searching for similar content.
+    For beginners: This class handles all vector operations using the latest
+    LangChain practices for embeddings and vector search.
     """
     
     def __init__(self, qdrant_client: QdrantClient):
         self.qdrant_client = qdrant_client
-        self.embeddings = None
-        self.text_splitter = None
+        self.embeddings: Optional[Embeddings] = None
+        self.text_splitter: Optional[RecursiveCharacterTextSplitter] = None
+        self.vector_stores: Dict[str, QdrantVectorStore] = {}
         self._initialized = False
         
     async def initialize(self):
-        """Initialize the vector store service."""
+        """Initialize the vector store service with modern practices."""
         if self._initialized:
             return
             
-        logger.info("🔧 Initializing vector store service...")
+        logger.info("🔧 Initializing modern vector store service...")
         
         # Initialize embedding model
         await self._init_embedding_model()
@@ -61,70 +73,98 @@ class VectorStoreService:
         # Initialize text splitter
         await self._init_text_splitter()
         
-        # Ensure collections exist
-        await self._ensure_collections()
+        # Initialize vector stores
+        await self._init_vector_stores()
         
         self._initialized = True
-        logger.info("✅ Vector store service initialized!")
+        logger.info("✅ Modern vector store service initialized!")
     
     async def _init_embedding_model(self):
-        """Initialize the embedding model."""
+        """Initialize embedding model with multiple provider support."""
         logger.info(f"📊 Loading embedding model: {settings.embedding_model}")
         
         try:
-            # Run in thread pool to avoid blocking
-            self.embeddings = await asyncio.get_event_loop().run_in_executor(
-                None, 
-                lambda: HuggingFaceEmbeddings(
-                    model_name=settings.embedding_model,
-                    model_kwargs={'device': 'cpu'},  # Use CPU for compatibility
-                    encode_kwargs={'normalize_embeddings': True}
-                )
-            )
-            logger.info("✅ Embedding model loaded successfully!")
+            # Determine embedding provider based on model name
+            if "google" in settings.embedding_model.lower() or "gemini" in settings.embedding_model.lower():
+                if GOOGLE_AVAILABLE:
+                    self.embeddings = GoogleGenerativeAIEmbeddings(
+                        model=settings.embedding_model,
+                        google_api_key=settings.google_api_key
+                    )
+                    logger.info("✅ Using Google Generative AI embeddings")
+                else:
+                    logger.warning("Google embeddings not available, falling back to HuggingFace")
+                    self.embeddings = await self._init_huggingface_embeddings()
+            
+            elif "openai" in settings.embedding_model.lower() or "text-embedding" in settings.embedding_model.lower():
+                if OPENAI_AVAILABLE:
+                    self.embeddings = OpenAIEmbeddings(
+                        model=settings.embedding_model,
+                        openai_api_key=settings.openai_api_key
+                    )
+                    logger.info("✅ Using OpenAI embeddings")
+                else:
+                    logger.warning("OpenAI embeddings not available, falling back to HuggingFace")
+                    self.embeddings = await self._init_huggingface_embeddings()
+            
+            else:
+                # Default to HuggingFace
+                self.embeddings = await self._init_huggingface_embeddings()
+                
         except Exception as e:
             logger.error(f"❌ Failed to load embedding model: {e}")
-            raise
+            # Fallback to HuggingFace
+            self.embeddings = await self._init_huggingface_embeddings()
+    
+    async def _init_huggingface_embeddings(self) -> HuggingFaceEmbeddings:
+        """Initialize HuggingFace embeddings as fallback."""
+        return await asyncio.get_event_loop().run_in_executor(
+            None,
+            lambda: HuggingFaceEmbeddings(
+                model_name=settings.embedding_model,
+                model_kwargs={'device': 'cpu', 'trust_remote_code': True},
+                encode_kwargs={'normalize_embeddings': True}
+            )
+        )
     
     async def _init_text_splitter(self):
-        """Initialize the text splitter for chunking."""
-        logger.info("📝 Initializing text splitter...")
+        """Initialize modern text splitter."""
+        logger.info("📝 Initializing modern text splitter...")
         
         self.text_splitter = RecursiveCharacterTextSplitter(
             chunk_size=settings.chunk_size_medium,
             chunk_overlap=settings.chunk_overlap,
             length_function=len,
-            separators=["\n\n", "\n", " ", ""]
+            separators=["\n\n", "\n", " ", ""],
+            add_start_index=True  # Modern feature to track chunk positions
         )
         
-        logger.info("✅ Text splitter initialized!")
+        logger.info("✅ Modern text splitter initialized!")
     
-    async def _ensure_collections(self):
-        """Ensure required collections exist in Qdrant."""
-        logger.info("📚 Ensuring Qdrant collections exist...")
+    async def _init_vector_stores(self):
+        """Initialize QdrantVectorStore instances for different collections."""
+        logger.info("📚 Initializing QdrantVectorStore instances...")
         
-        collections = {
-            "documents": 768,  # Full document embeddings
-            "document_chunks": 768,  # Chunk embeddings
-            "query_cache": 768,  # Query embeddings for caching
-        }
+        collections = ["documents", "document_chunks", "query_cache"]
         
-        for collection_name, vector_size in collections.items():
+        for collection_name in collections:
             try:
-                # Check if collection exists
-                await asyncio.get_event_loop().run_in_executor(
-                    None, self.qdrant_client.get_collection, collection_name
+                # Create vector store instance
+                vector_store = QdrantVectorStore(
+                    client=self.qdrant_client,
+                    collection_name=collection_name,
+                    embeddings=self.embeddings,
+                    vector_name="content_vector",  # Modern practice: named vectors
+                    content_payload_key="content",
+                    metadata_payload_key="metadata"
                 )
-                logger.info(f"✅ Collection '{collection_name}' exists")
-            except Exception:
-                # Collection doesn't exist, create it
-                await asyncio.get_event_loop().run_in_executor(
-                    None,
-                    self.qdrant_client.create_collection,
-                    collection_name,
-                    VectorParams(size=vector_size, distance=Distance.COSINE)
-                )
-                logger.info(f"✅ Created collection '{collection_name}'")
+                
+                self.vector_stores[collection_name] = vector_store
+                logger.info(f"✅ Initialized vector store for '{collection_name}'")
+                
+            except Exception as e:
+                logger.error(f"❌ Failed to initialize vector store for {collection_name}: {e}")
+                raise
     
     async def create_document_embeddings(
         self, 
@@ -133,10 +173,9 @@ class VectorStoreService:
         metadata: Dict[str, Any] = None
     ) -> List[DocumentChunk]:
         """
-        Create embeddings for a document by splitting it into chunks.
+        Create embeddings using modern LangChain practices.
         
-        For beginners: This takes a document, splits it into smaller pieces,
-        and creates embeddings for each piece.
+        Uses QdrantVectorStore.from_texts() for efficient batch processing.
         """
         if not self._initialized:
             await self.initialize()
@@ -144,112 +183,79 @@ class VectorStoreService:
         logger.info(f"📝 Creating embeddings for document: {document_id}")
         
         try:
-            # Split document into chunks
-            chunks = await self._split_document(text)
+            # Create document and split into chunks
+            document = LangChainDocument(
+                page_content=text,
+                metadata=metadata or {}
+            )
             
-            # Create embeddings for each chunk
-            chunk_embeddings = []
-            batch_size = settings.embedding_batch_size
+            chunks = await asyncio.get_event_loop().run_in_executor(
+                None, self.text_splitter.split_documents, [document]
+            )
             
-            for i in range(0, len(chunks), batch_size):
-                batch = chunks[i:i + batch_size]
-                batch_texts = [chunk.page_content for chunk in batch]
-                
-                # Generate embeddings for batch
-                embeddings = await asyncio.get_event_loop().run_in_executor(
-                    None, self.embeddings.embed_documents, batch_texts
-                )
-                
-                # Create chunk objects with embeddings
-                for j, (chunk, embedding) in enumerate(zip(batch, embeddings)):
-                    chunk_id = f"{document_id}_chunk_{i + j}"
-                    
-                    # Store in Qdrant
-                    await self._store_chunk_embedding(
-                        chunk_id=chunk_id,
-                        embedding=embedding,
-                        text=chunk.page_content,
-                        metadata={
-                            "document_id": document_id,
-                            "chunk_index": i + j,
-                            "chunk_size": len(chunk.page_content),
-                            "created_at": datetime.now().isoformat(),
-                            **(metadata or {})
-                        }
-                    )
-                    
-                    # Create DocumentChunk object
-                    chunk_embeddings.append(DocumentChunk(
-                        id=chunk_id,
-                        document_id=document_id,
-                        chunk_index=i + j,
-                        text=chunk.page_content,
-                        chunk_level=ChunkLevel.MEDIUM,
-                        token_count=len(chunk.page_content.split()),
-                        start_char=0,  # TODO: Calculate actual positions
-                        end_char=len(chunk.page_content),
-                        embedding=embedding,
-                        embedding_model=settings.embedding_model
-                    ))
-                    
-                logger.info(f"✅ Processed batch {i//batch_size + 1}/{(len(chunks)-1)//batch_size + 1}")
-                
-            logger.info(f"✅ Created {len(chunk_embeddings)} chunk embeddings for document {document_id}")
-            return chunk_embeddings
+            # Prepare texts and metadata for batch processing
+            texts = [chunk.page_content for chunk in chunks]
+            metadatas = []
+            
+            for i, chunk in enumerate(chunks):
+                chunk_metadata = {
+                    "document_id": document_id,
+                    "chunk_index": i,
+                    "chunk_size": len(chunk.page_content),
+                    "created_at": datetime.now().isoformat(),
+                    "start_index": chunk.metadata.get("start_index", 0),
+                    **(chunk.metadata or {}),
+                    **(metadata or {})
+                }
+                metadatas.append(chunk_metadata)
+            
+            # Use modern batch processing
+            vector_store = self.vector_stores["document_chunks"]
+            
+            # Add documents to vector store
+            ids = await asyncio.get_event_loop().run_in_executor(
+                None,
+                vector_store.add_texts,
+                texts,
+                metadatas,
+                [f"{document_id}_chunk_{i}" for i in range(len(texts))]
+            )
+            
+            # Create DocumentChunk objects for return
+            chunk_objects = []
+            for i, (chunk_id, chunk_text) in enumerate(zip(ids, texts)):
+                chunk_objects.append(DocumentChunk(
+                    id=chunk_id,
+                    document_id=document_id,
+                    chunk_index=i,
+                    text=chunk_text,
+                    chunk_level=ChunkLevel.MEDIUM,
+                    token_count=len(chunk_text.split()),
+                    start_char=metadatas[i].get("start_index", 0),
+                    end_char=metadatas[i].get("start_index", 0) + len(chunk_text),
+                    embedding=None,  # Embedding is stored in vector store
+                    embedding_model=settings.embedding_model
+                ))
+            
+            logger.info(f"✅ Created {len(chunk_objects)} chunk embeddings for document {document_id}")
+            return chunk_objects
             
         except Exception as e:
             logger.error(f"❌ Failed to create embeddings for document {document_id}: {e}")
             raise
     
-    async def _split_document(self, text: str) -> List[LangChainDocument]:
-        """Split document into chunks using LangChain text splitter."""
-        logger.info(f"📝 Splitting document ({len(text)} characters)")
-        
-        # Run text splitting in thread pool
-        chunks = await asyncio.get_event_loop().run_in_executor(
-            None, self.text_splitter.create_documents, [text]
-        )
-        
-        logger.info(f"✅ Split into {len(chunks)} chunks")
-        return chunks
-    
-    async def _store_chunk_embedding(
-        self, 
-        chunk_id: str, 
-        embedding: List[float], 
-        text: str, 
-        metadata: Dict[str, Any]
-    ):
-        """Store a chunk embedding in Qdrant."""
-        point = PointStruct(
-            id=chunk_id,
-            vector=embedding,
-            payload={
-                "text": text,
-                "metadata": metadata
-            }
-        )
-        
-        # Store in Qdrant
-        await asyncio.get_event_loop().run_in_executor(
-            None,
-            self.qdrant_client.upsert,
-            "document_chunks",
-            [point]
-        )
-    
     async def similarity_search(
         self, 
         query: str, 
-        limit: int = 10,
-        min_score: float = 0.0,
-        filter_metadata: Dict[str, Any] = None
+        k: int = 10,
+        score_threshold: float = 0.0,
+        filter_metadata: Dict[str, Any] = None,
+        collection_name: str = "document_chunks"
     ) -> List[Dict[str, Any]]:
         """
-        Perform similarity search for a query.
+        Perform similarity search using modern LangChain QdrantVectorStore.
         
-        For beginners: This takes a question and finds the most similar
-        document chunks that might contain the answer.
+        Uses built-in similarity_search_with_score for better results.
         """
         if not self._initialized:
             await self.initialize()
@@ -257,64 +263,104 @@ class VectorStoreService:
         logger.info(f"🔍 Performing similarity search for: '{query[:50]}...'")
         
         try:
-            # Generate query embedding
-            query_embedding = await asyncio.get_event_loop().run_in_executor(
-                None, self.embeddings.embed_query, query
-            )
+            vector_store = self.vector_stores[collection_name]
             
-            # Create search filter if provided
-            search_filter = None
-            if filter_metadata:
-                conditions = []
-                for key, value in filter_metadata.items():
-                    conditions.append(
-                        FieldCondition(
-                            key=f"metadata.{key}",
-                            match=MatchValue(value=value)
-                        )
-                    )
-                search_filter = Filter(must=conditions)
-            
-            # Perform search
+            # Use modern similarity search with score
             search_results = await asyncio.get_event_loop().run_in_executor(
                 None,
-                self.qdrant_client.search,
-                "document_chunks",
-                query_embedding,
-                limit,
-                search_filter,
-                True,  # with_payload
-                True   # with_vectors
+                vector_store.similarity_search_with_score,
+                query,
+                k,
+                filter_metadata  # Modern filter support
             )
             
             # Format results
             results = []
-            for result in search_results:
-                if result.score >= min_score:
+            for doc, score in search_results:
+                if score >= score_threshold:
                     results.append({
-                        "id": result.id,
-                        "score": result.score,
-                        "text": result.payload.get("text", ""),
-                        "metadata": result.payload.get("metadata", {}),
-                        "embedding": result.vector
+                        "id": doc.metadata.get("id", "unknown"),
+                        "score": score,
+                        "text": doc.page_content,
+                        "metadata": doc.metadata,
+                        "document": doc  # Include full document for advanced use
                     })
             
-            logger.info(f"✅ Found {len(results)} similar chunks (score >= {min_score})")
+            logger.info(f"✅ Found {len(results)} similar chunks (score >= {score_threshold})")
             return results
             
         except Exception as e:
             logger.error(f"❌ Similarity search failed: {e}")
             raise
     
+    async def create_retriever(
+        self,
+        collection_name: str = "document_chunks",
+        search_type: str = "similarity",
+        search_kwargs: Dict[str, Any] = None
+    ):
+        """
+        Create a modern LangChain retriever from the vector store.
+        
+        Modern practice: Use retrievers for better integration with LangChain chains.
+        """
+        if not self._initialized:
+            await self.initialize()
+            
+        vector_store = self.vector_stores[collection_name]
+        
+        # Default search kwargs
+        default_kwargs = {"k": 10, "score_threshold": 0.0}
+        search_kwargs = {**default_kwargs, **(search_kwargs or {})}
+        
+        # Create retriever with modern configuration
+        retriever = vector_store.as_retriever(
+            search_type=search_type,
+            search_kwargs=search_kwargs
+        )
+        
+        logger.info(f"✅ Created {search_type} retriever for collection '{collection_name}'")
+        return retriever
+    
+    async def from_existing_collection(
+        self,
+        collection_name: str,
+        embedding_model: Optional[Embeddings] = None
+    ) -> QdrantVectorStore:
+        """
+        Connect to existing collection using modern LangChain pattern.
+        
+        Follows the pattern from your provided code.
+        """
+        if not self._initialized:
+            await self.initialize()
+            
+        embeddings = embedding_model or self.embeddings
+        
+        try:
+            # Use modern from_existing_collection pattern
+            vector_store = QdrantVectorStore.from_existing_collection(
+                embedding=embeddings,
+                collection_name=collection_name,
+                url=settings.qdrant_url,
+                api_key=getattr(settings, 'qdrant_api_key', None)
+            )
+            
+            logger.info(f"✅ Connected to existing collection '{collection_name}'")
+            return vector_store
+            
+        except Exception as e:
+            logger.error(f"❌ Failed to connect to collection {collection_name}: {e}")
+            raise
+    
     async def get_document_chunks(self, document_id: str) -> List[Dict[str, Any]]:
-        """Get all chunks for a specific document."""
+        """Get all chunks for a specific document using modern filtering."""
         logger.info(f"📖 Getting chunks for document: {document_id}")
         
         try:
-            # Search with document filter
             results = await self.similarity_search(
-                query="*",  # Match all
-                limit=1000,  # Large limit to get all chunks
+                query="",  # Empty query for metadata-only search
+                k=1000,  # Large limit to get all chunks
                 filter_metadata={"document_id": document_id}
             )
             
@@ -329,24 +375,28 @@ class VectorStoreService:
             raise
     
     async def delete_document_embeddings(self, document_id: str) -> bool:
-        """Delete all embeddings for a document."""
+        """Delete embeddings using modern vector store methods."""
         logger.info(f"🗑️  Deleting embeddings for document: {document_id}")
         
         try:
-            # Delete from document_chunks collection
-            result = await asyncio.get_event_loop().run_in_executor(
-                None,
-                self.qdrant_client.delete,
-                "document_chunks",
-                Filter(must=[
-                    FieldCondition(
-                        key="metadata.document_id",
-                        match=MatchValue(value=document_id)
-                    )
-                ])
-            )
+            vector_store = self.vector_stores["document_chunks"]
             
-            logger.info(f"✅ Deleted embeddings for document {document_id}")
+            # Get all chunk IDs for the document
+            chunks = await self.get_document_chunks(document_id)
+            chunk_ids = [chunk.get("id") for chunk in chunks if chunk.get("id")]
+            
+            if chunk_ids:
+                # Delete using modern vector store method
+                await asyncio.get_event_loop().run_in_executor(
+                    None,
+                    vector_store.delete,
+                    chunk_ids
+                )
+                
+                logger.info(f"✅ Deleted {len(chunk_ids)} embeddings for document {document_id}")
+            else:
+                logger.info(f"ℹ️ No embeddings found for document {document_id}")
+            
             return True
             
         except Exception as e:
@@ -360,8 +410,9 @@ class VectorStoreService:
         try:
             stats = {}
             
-            for collection_name in ["documents", "document_chunks", "query_cache"]:
+            for collection_name, vector_store in self.vector_stores.items():
                 try:
+                    # Use Qdrant client for detailed stats
                     collection_info = await asyncio.get_event_loop().run_in_executor(
                         None, self.qdrant_client.get_collection, collection_name
                     )
@@ -370,7 +421,8 @@ class VectorStoreService:
                         "points_count": collection_info.points_count,
                         "vector_size": collection_info.config.params.vectors.size,
                         "distance": collection_info.config.params.vectors.distance.name,
-                        "status": collection_info.status.name
+                        "status": collection_info.status.name,
+                        "embedding_model": settings.embedding_model
                     }
                 except Exception as e:
                     stats[collection_name] = {"error": str(e)}
@@ -383,37 +435,59 @@ class VectorStoreService:
             return {"error": str(e)}
     
     async def health_check(self) -> Dict[str, Any]:
-        """Check the health of the vector store service."""
-        logger.info("🏥 Performing vector store health check...")
+        """Enhanced health check with modern features."""
+        logger.info("🏥 Performing comprehensive health check...")
         
         health = {
             "status": "healthy",
             "initialized": self._initialized,
             "embedding_model": settings.embedding_model,
+            "embedding_provider": self._get_embedding_provider(),
             "collections": {},
+            "features": {
+                "google_embeddings": GOOGLE_AVAILABLE,
+                "openai_embeddings": OPENAI_AVAILABLE,
+                "modern_langchain": True
+            },
             "timestamp": datetime.now().isoformat()
         }
         
         try:
-            # Check collections
-            collections = await asyncio.get_event_loop().run_in_executor(
-                None, self.qdrant_client.get_collections
-            )
-            
-            health["collections"] = {
-                "count": len(collections.collections),
-                "names": [col.name for col in collections.collections]
-            }
+            # Test vector stores
+            for collection_name, vector_store in self.vector_stores.items():
+                try:
+                    # Test basic functionality
+                    test_result = await asyncio.get_event_loop().run_in_executor(
+                        None,
+                        vector_store.similarity_search,
+                        "health check test",
+                        1
+                    )
+                    health["collections"][collection_name] = {
+                        "status": "healthy",
+                        "test_search": "passed"
+                    }
+                except Exception as e:
+                    health["collections"][collection_name] = {
+                        "status": "unhealthy",
+                        "error": str(e)
+                    }
             
             # Test embedding generation
             if self.embeddings:
-                test_embedding = await asyncio.get_event_loop().run_in_executor(
-                    None, self.embeddings.embed_query, "test"
-                )
-                health["embedding_test"] = {
-                    "success": True,
-                    "embedding_size": len(test_embedding)
-                }
+                try:
+                    test_embedding = await asyncio.get_event_loop().run_in_executor(
+                        None, self.embeddings.embed_query, "test"
+                    )
+                    health["embedding_test"] = {
+                        "success": True,
+                        "embedding_size": len(test_embedding)
+                    }
+                except Exception as e:
+                    health["embedding_test"] = {
+                        "success": False,
+                        "error": str(e)
+                    }
             
         except Exception as e:
             health["status"] = "unhealthy"
@@ -421,28 +495,51 @@ class VectorStoreService:
         
         logger.info(f"✅ Health check complete: {health['status']}")
         return health
+    
+    def _get_embedding_provider(self) -> str:
+        """Get the current embedding provider name."""
+        if self.embeddings:
+            return type(self.embeddings).__name__
+        return "unknown"
 
 
 # ==============================================
-# Utility Functions
+# Modern Utility Functions
 # ==============================================
 
 async def create_vector_store(qdrant_client: QdrantClient) -> VectorStoreService:
-    """Create and initialize a vector store service."""
+    """Create and initialize a modern vector store service."""
     vector_store = VectorStoreService(qdrant_client)
     await vector_store.initialize()
     return vector_store
 
 
+async def create_from_documents(
+    documents: List[LangChainDocument],
+    embeddings: Embeddings,
+    collection_name: str,
+    qdrant_url: str = "http://localhost:6333"
+) -> QdrantVectorStore:
+    """
+    Create vector store from documents using modern LangChain pattern.
+    
+    Follows the pattern from your provided code.
+    """
+    return await asyncio.get_event_loop().run_in_executor(
+        None,
+        QdrantVectorStore.from_documents,
+        documents,
+        embeddings,
+        url=qdrant_url,
+        collection_name=collection_name
+    )
+
+
 def calculate_similarity_score(embedding1: List[float], embedding2: List[float]) -> float:
     """Calculate cosine similarity between two embeddings."""
-    import numpy as np
-    
-    # Convert to numpy arrays
     vec1 = np.array(embedding1)
     vec2 = np.array(embedding2)
     
-    # Calculate cosine similarity
     dot_product = np.dot(vec1, vec2)
     norm1 = np.linalg.norm(vec1)
     norm2 = np.linalg.norm(vec2)
@@ -453,22 +550,43 @@ def calculate_similarity_score(embedding1: List[float], embedding2: List[float])
     return dot_product / (norm1 * norm2)
 
 
-def chunk_text_by_tokens(text: str, chunk_size: int = 512, overlap: int = 50) -> List[str]:
-    """Split text into chunks by token count."""
-    words = text.split()
-    chunks = []
+def extract_content_and_metadata(search_results: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """
+    Extract content and metadata from search results for LLM context.
     
-    for i in range(0, len(words), chunk_size - overlap):
-        chunk = " ".join(words[i:i + chunk_size])
-        if chunk.strip():
-            chunks.append(chunk)
+    Modern practice: Structured context preparation for better LLM responses.
+    """
+    context_parts = []
+    sources = []
     
-    return chunks
+    for i, result in enumerate(search_results):
+        content = result.get("text", "")
+        metadata = result.get("metadata", {})
+        
+        # Format context with metadata
+        context_part = f"[Source {i+1}] {content}"
+        if metadata.get("document_id"):
+            context_part += f" (Document: {metadata['document_id']})"
+        if metadata.get("chunk_index") is not None:
+            context_part += f" (Chunk: {metadata['chunk_index']})"
+        
+        context_parts.append(context_part)
+        sources.append({
+            "document_id": metadata.get("document_id"),
+            "chunk_index": metadata.get("chunk_index"),
+            "score": result.get("score", 0.0)
+        })
+    
+    return {
+        "context": "\n\n".join(context_parts),
+        "sources": sources,
+        "total_chunks": len(search_results)
+    }
 
 
 if __name__ == "__main__":
-    # For testing the vector store service
-    async def test_vector_store():
+    # Modern testing approach
+    async def test_modern_vector_store():
         from qdrant_client import QdrantClient
         
         client = QdrantClient(":memory:")
@@ -476,17 +594,29 @@ if __name__ == "__main__":
         
         # Test health check
         health = await vector_store.health_check()
-        print("Vector Store Health:", health)
+        print("Modern Vector Store Health:", health)
         
-        # Test embedding creation
-        test_doc = "This is a test document for the vector store."
+        # Test document processing
+        test_doc = "This is a test document for the modern vector store using LangChain best practices."
         embeddings = await vector_store.create_document_embeddings(
             "test_doc_1", test_doc
         )
-        print(f"Created {len(embeddings)} embeddings")
+        print(f"Created {len(embeddings)} embeddings using modern practices")
+        
+        # Test retriever creation
+        retriever = await vector_store.create_retriever(
+            search_kwargs={"k": 5, "score_threshold": 0.1}
+        )
+        print("Created modern retriever")
         
         # Test similarity search
-        results = await vector_store.similarity_search("test document")
+        results = await vector_store.similarity_search(
+            "test document", k=3, score_threshold=0.0
+        )
         print(f"Found {len(results)} similar chunks")
+        
+        # Test context extraction
+        context_data = extract_content_and_metadata(results)
+        print(f"Extracted context with {context_data['total_chunks']} chunks")
     
-    asyncio.run(test_vector_store()) 
+    asyncio.run(test_modern_vector_store()) 
