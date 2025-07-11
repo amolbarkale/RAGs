@@ -92,11 +92,23 @@ class ProductionDocumentProcessor:
         )
         
         # Initialize token splitter (for precise token control)
-        self.token_splitter = TokenTextSplitter(
-            chunk_size=self.chunk_size,
-            chunk_overlap=self.chunk_overlap,
-            model_name="cl100k_base"  # GPT-4 tokenizer for accuracy
-        )
+        try:
+            import tiktoken
+            self.token_splitter = TokenTextSplitter(
+                chunk_size=self.chunk_size,
+                chunk_overlap=self.chunk_overlap,
+                encoding_name="cl100k_base"  # GPT-4 tokenizer for accuracy
+            )
+        except Exception as e:
+            logger.warning(f"⚠️ Failed to initialize token splitter: {e}")
+            # Fall back to character-based splitting
+            self.token_splitter = RecursiveCharacterTextSplitter(
+                chunk_size=self.chunk_size * 4,  # Rough character estimate
+                chunk_overlap=self.chunk_overlap * 4,
+                length_function=len,
+                separators=["\n\n", "\n", ". ", "? ", "! ", " ", ""],
+                add_start_index=True
+            )
         
         # Ensure vector store is initialized
         await self.vector_store.initialize()

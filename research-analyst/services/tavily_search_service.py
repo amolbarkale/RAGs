@@ -15,7 +15,10 @@ import re
 from urllib.parse import urlparse
 
 # LangChain imports
-from langchain_community.tools.tavily_search import TavilySearchResults
+try:
+    from langchain_tavily import TavilySearchResults
+except ImportError:
+    from langchain_community.tools.tavily_search import TavilySearchResults
 from langchain_core.documents import Document as LangChainDocument
 
 # Core imports

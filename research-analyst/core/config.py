@@ -57,7 +57,7 @@ class Settings(BaseSettings):
     # ==============================================
     # LangChain AI Models Configuration
     # ==============================================
-    embedding_model: str = "sentence-transformers/bge-large-en-v1.5"
+    embedding_model: str = "all-MiniLM-L6-v2"
     reranker_model: str = "cross-encoder/ms-marco-MiniLM-L-6-v2"
     llm_model: str = "gemini-2.0-flash"
     backup_llm_model: str = "gemini-1.5-flash"

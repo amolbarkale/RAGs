@@ -47,78 +47,109 @@ from services.tavily_search_service import create_tavily_service
 
 
 # ==============================================
+# Service Safety Functions
+# ==============================================
+
+def check_service_availability(service_name: str) -> bool:
+    """Check if a service is available and initialized."""
+    if not hasattr(app.state, 'services'):
+        return False
+    return app.state.services.get(service_name) is not None
+
+def get_service_or_error(service_name: str):
+    """Get a service or raise an appropriate error."""
+    if not hasattr(app.state, 'services'):
+        raise HTTPException(
+            status_code=503, 
+            detail=f"Services not initialized. Service '{service_name}' unavailable."
+        )
+    
+    service = app.state.services.get(service_name)
+    if service is None:
+        raise HTTPException(
+            status_code=503,
+            detail=f"Service '{service_name}' is not available. Check system status at /health"
+        )
+    
+    return service
+
+
+# ==============================================
 # Application Lifecycle Management
 # ==============================================
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """
-    Manage application startup and shutdown.
+    Manage application startup and shutdown using robust initialization.
     
     For beginners: This function runs when the app starts and stops.
-    It's where we initialize databases, load models, etc.
+    It uses a robust initialization system that handles errors gracefully.
     """
     # Startup
     print("🚀 Starting Research Assistant RAG system...")
     print_config_summary()
     
-    # Initialize database connections
-    print("🔧 Initializing database connections...")
-    await db_manager.initialize()
-    
-    # Initialize vector store service
-    print("🔧 Initializing vector store service...")
-    qdrant_client = db_manager.get_vector_client()
-    vector_store = await create_vector_store(qdrant_client)
-    
-    # Initialize production document processor
-    print("🚀 Initializing production document processor...")
-    document_processor = await create_document_processor(vector_store)
-    
-    # Initialize LLM service
-    print("🤖 Initializing LLM service with Gemini...")
-    llm_service = await create_llm_service()
-    
-    # Initialize Tavily web search service
-    print("🌐 Initializing Tavily web search service...")
-    tavily_service = await create_tavily_service()
-    
-    # Initialize search service
-    print("🔍 Initializing search service...")
-    search_service = await create_search_service(vector_store)
-    
-    # Store services in app state for access in endpoints
-    app.state.vector_store = vector_store
-    app.state.document_processor = document_processor
-    app.state.search_service = search_service
-    app.state.llm_service = llm_service
-    app.state.tavily_service = tavily_service
-    
-    # Check database health
-    health = await db_manager.health_check()
-    print(f"📊 Database Health: Traditional DB: {'✅' if health['traditional_db'] else '❌'}, Vector DB: {'✅' if health['vector_db'] else '❌'}")
-    
-    # Setup monitoring
-    print("📈 Setting up monitoring...")
-    # TODO: Initialize Prometheus metrics
-    
-    print("✅ Application started successfully!")
+    try:
+        # Use robust initialization system
+        from services.robust_init import initialize_application, cleanup_application
+        
+        print("🔧 Initializing all services robustly...")
+        init_result = await initialize_application()
+        
+        if not init_result['success']:
+            print("⚠️ Some services failed to initialize, but continuing with available services...")
+            for error in init_result['errors']:
+                print(f"   ❌ {error}")
+        
+        # Store services in app state
+        services = init_result['services']
+        app.state.services = services
+        app.state.initialization_status = init_result['status']
+        
+        # Store individual services for backward compatibility
+        app.state.vector_store = services.get('vector_store')
+        app.state.document_processor = services.get('document_processor')
+        app.state.search_service = services.get('search_service')
+        app.state.llm_service = services.get('llm_service')
+        app.state.tavily_service = services.get('tavily_service')
+        app.state.db_manager = services.get('db_manager')
+        
+        # Print initialization status
+        print("📊 Service Status:")
+        for service, status in init_result['status'].items():
+            status_icon = "✅" if status == 'success' else "⚠️" if status in ['fallback', 'minimal'] else "❌"
+            print(f"   {status_icon} {service}: {status}")
+        
+        # Check overall health
+        if app.state.db_manager:
+            try:
+                health = await app.state.db_manager.health_check()
+                print(f"📊 Database Health: Traditional DB: {'✅' if health.get('traditional_db') else '❌'}, Vector DB: {'✅' if health.get('vector_db') else '❌'}")
+            except Exception as e:
+                print(f"⚠️ Health check failed: {e}")
+        
+        print("✅ Application startup complete!")
+        
+    except Exception as e:
+        print(f"❌ Critical startup failure: {e}")
+        # Continue anyway - let the app start in degraded mode
+        app.state.services = {}
+        app.state.initialization_status = {'critical_error': str(e)}
     
     yield  # This is where the app runs
     
     # Shutdown
     print("🔄 Shutting down Research Assistant...")
     
-    # Cleanup Tavily service
-    if hasattr(app.state, 'tavily_service') and app.state.tavily_service:
-        await app.state.tavily_service.cleanup()
-    
-    # Cleanup database connections
-    await db_manager.close()
-    
-    # Save any pending data
-    print("💾 Saving pending data...")
-    # TODO: Implement graceful shutdown
+    try:
+        # Use robust cleanup
+        if hasattr(app.state, 'services'):
+            await cleanup_application(app.state.services)
+        else:
+            print("⚠️ No services to cleanup")
+    except Exception as e:
+        print(f"⚠️ Cleanup error: {e}")
     
     print("✅ Application shutdown complete!")
 
@@ -192,34 +223,82 @@ async def root() -> Dict[str, str]:
 @app.get("/health")
 async def health_check() -> Dict[str, Any]:
     """
-    Health check endpoint for monitoring.
+    Health check endpoint for monitoring with robust error handling.
     
     For beginners: This endpoint tells us if the system is healthy.
     Useful for monitoring and deployment systems.
     """
-    # Get database health
-    db_health = await db_manager.health_check()
-    
-    # Get vector store health
-    vector_store_health = await app.state.vector_store.health_check()
-    
-    # Overall system health
-    system_healthy = (
-        db_health.get("traditional_db", False) and 
-        db_health.get("vector_db", False) and
-        vector_store_health.get("status") == "healthy"
-    )
-    
-    return {
-        "status": "healthy" if system_healthy else "unhealthy",
+    health_data = {
+        "status": "unknown",
         "version": settings.version,
         "environment": "development" if settings.development else "production",
         "timestamp": datetime.now().isoformat(),
-        "services": {
-            "database": db_health,
-            "vector_store": vector_store_health
-        }
+        "services": {},
+        "initialization_status": getattr(app.state, 'initialization_status', {})
     }
+    
+    # Check if services were initialized
+    if not hasattr(app.state, 'services'):
+        health_data["status"] = "degraded"
+        health_data["services"]["error"] = "Services not initialized"
+        return health_data
+    
+    services_healthy = 0
+    total_services = 0
+    
+    # Check database health
+    try:
+        if app.state.services.get('db_manager'):
+            db_health = await app.state.services['db_manager'].health_check()
+            health_data["services"]["database"] = db_health
+            if db_health.get("traditional_db") and db_health.get("vector_db"):
+                services_healthy += 1
+        else:
+            health_data["services"]["database"] = "unavailable"
+        total_services += 1
+    except Exception as e:
+        health_data["services"]["database"] = {"error": str(e)}
+    
+    # Check vector store health
+    try:
+        if app.state.services.get('vector_store'):
+            vector_health = await app.state.services['vector_store'].health_check()
+            health_data["services"]["vector_store"] = vector_health
+            if vector_health.get("status") == "healthy":
+                services_healthy += 1
+        else:
+            health_data["services"]["vector_store"] = "unavailable"
+        total_services += 1
+    except Exception as e:
+        health_data["services"]["vector_store"] = {"error": str(e)}
+    
+    # Check other services
+    service_checks = [
+        ("llm_service", "llm"),
+        ("tavily_service", "web_search"),
+        ("search_service", "search"),
+        ("document_processor", "document_processing")
+    ]
+    
+    for service_key, display_name in service_checks:
+        if app.state.services.get(service_key):
+            health_data["services"][display_name] = "available"
+            services_healthy += 1
+        else:
+            health_data["services"][display_name] = "unavailable"
+        total_services += 1
+    
+    # Determine overall health
+    if services_healthy == total_services:
+        health_data["status"] = "healthy"
+    elif services_healthy > total_services // 2:
+        health_data["status"] = "degraded"
+    else:
+        health_data["status"] = "unhealthy"
+    
+    health_data["services_healthy"] = f"{services_healthy}/{total_services}"
+    
+    return health_data
 
 
 @app.get("/config")
@@ -349,8 +428,8 @@ async def upload_document(
     logger.info(f"🚀 Starting document processing for {db_document.id}")
     
     try:
-        # Get document processor from app state
-        document_processor = app.state.document_processor
+        # Get document processor from app state using safety function
+        document_processor = get_service_or_error('document_processor')
         
         # Process document through complete pipeline
         processing_result = await document_processor.process_document(
@@ -502,8 +581,8 @@ async def process_query(
     then generates a comprehensive response with citations.
     """
     try:
-        # Get search service from app state
-        search_service: SearchService = app.state.search_service
+        # Get search service from app state using safety function
+        search_service: SearchService = get_service_or_error('search_service')
         
         # Process the query using the search service
         response = await search_service.process_query(query_request)
@@ -531,8 +610,8 @@ async def hybrid_search(
     search request parameters, returning structured results with scoring.
     """
     try:
-        # Get search service from app state
-        search_service: SearchService = app.state.search_service
+        # Get search service from app state using safety function
+        search_service: SearchService = get_service_or_error('search_service')
         
         # Perform hybrid search using the search service
         results = await search_service.hybrid_search(search_request)

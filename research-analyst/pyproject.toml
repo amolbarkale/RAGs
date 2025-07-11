@@ -29,8 +29,10 @@ dependencies = [
     # Vector Database & Embeddings
     "qdrant-client>=1.6.0",
     "sentence-transformers>=2.2.0",
+    "langchain-huggingface>=0.0.1",
     # Web Search (Tavily only)
     "tavily-python>=0.3.0",
+    "langchain-tavily>=0.0.1",
     # Document Processing (LangChain Loaders)
     "pypdf>=3.17.0",
     "python-docx>=0.8.11",

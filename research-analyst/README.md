@@ -1,6 +1,10 @@
-# Research Assistant - Hybrid RAG System
+![Research Assistant Banner](./image.png)
 
-Advanced Research Assistant that combines document analysis with real-time web search using **LangChain**, **Google Gemini**, and **Tavily API**.
+# 🚀 Research Assistant - Hybrid RAG System
+
+**AI-Powered Document Analysis + Real-Time Web Search**
+
+Transform your documents into an intelligent knowledge base! Upload PDFs, ask questions, and get AI-powered answers with real-time web search integration.
 
 ## 🚀 Features
 

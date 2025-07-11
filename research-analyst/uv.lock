@@ -1112,6 +1112,20 @@ wheels = [
 ]
 
 [[package]]
+name = "langchain-huggingface"
+version = "0.3.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "huggingface-hub" },
+    { name = "langchain-core" },
+    { name = "tokenizers" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/3d/72/5f32c8e6db4d94c00252318aa7910102134b4bd6b2af1b13f2042f7f95f6/langchain_huggingface-0.3.0.tar.gz", hash = "sha256:d1cf93fb4d4eafc8b44edcd5fba904b27cbd3fda6cdef0e2321fbcf4efcda822", size = 24823, upload-time = "2025-06-10T20:50:44.739Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/c1/da/7446c2eeacd420cb975ceb49c6feca7be40cf8ed3686a128ca78410c148f/langchain_huggingface-0.3.0-py3-none-any.whl", hash = "sha256:aab85d57e649c805d2f2a9f8d72d87b5d12c45dd4831309ac9c37753ddb237ed", size = 27359, upload-time = "2025-06-10T20:50:43.506Z" },
+]
+
+[[package]]
 name = "langchain-openai"
 version = "0.3.27"
 source = { registry = "https://pypi.org/simple" }
@@ -1137,6 +1151,21 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/f2/8c/f006636b4cc2d95ba072a57df3f2f99d8cf7cb47a79cc447a7e3e391f7ee/langchain_qdrant-0.2.0.tar.gz", hash = "sha256:41b8573cbb1b4706f76dc769251d8e6b3e4107ecd5fa97c58141977ec19fba75", size = 21429, upload-time = "2024-11-05T20:51:15.122Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/68/01/22dad84373ba282237a3351547443c9c94c39fe75f71a1759f97cfa89725/langchain_qdrant-0.2.0-py3-none-any.whl", hash = "sha256:8eab5b8a553204ddb809d8183a6f1bc12fc265688592d9d897388f6939c79bf8", size = 23406, upload-time = "2024-11-05T20:51:13.472Z" },
+]
+
+[[package]]
+name = "langchain-tavily"
+version = "0.2.7"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "aiohttp" },
+    { name = "langchain" },
+    { name = "langchain-core" },
+    { name = "requests" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/6b/1b/c2d918b47a8e69aeb8e2587a309313282af535262bc7039976afaedde1bf/langchain_tavily-0.2.7.tar.gz", hash = "sha256:94426779de155ee3edcce71444ed31b2723abb0092351a517ffdd07134415fd5", size = 21191, upload-time = "2025-07-07T14:15:34.591Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/c9/7e/5292296d860ba0d9f7ffa25fa29f3f751245057223aa73610a84e441e25d/langchain_tavily-0.2.7-py3-none-any.whl", hash = "sha256:14b6c3be3f11c318b498570dbfe642997008f7b1a5f6dffbcd9b501db1ee1950", size = 25081, upload-time = "2025-07-07T14:15:33.335Z" },
 ]
 
 [[package]]
@@ -2408,8 +2437,10 @@ dependencies = [
     { name = "langchain-core" },
     { name = "langchain-experimental" },
     { name = "langchain-google-genai" },
+    { name = "langchain-huggingface" },
     { name = "langchain-openai" },
     { name = "langchain-qdrant" },
+    { name = "langchain-tavily" },
     { name = "langchain-text-splitters" },
     { name = "prometheus-client" },
     { name = "pydantic" },
@@ -2448,8 +2479,10 @@ requires-dist = [
     { name = "langchain-core", specifier = ">=0.1.0" },
     { name = "langchain-experimental", specifier = ">=0.0.40" },
     { name = "langchain-google-genai", specifier = ">=0.0.5" },
+    { name = "langchain-huggingface", specifier = ">=0.0.1" },
     { name = "langchain-openai", specifier = ">=0.0.5" },
     { name = "langchain-qdrant", specifier = ">=0.0.1" },
+    { name = "langchain-tavily", specifier = ">=0.0.1" },
     { name = "langchain-text-splitters", specifier = ">=0.0.1" },
     { name = "prometheus-client", specifier = ">=0.19.0" },
     { name = "pydantic", specifier = ">=2.0.0" },

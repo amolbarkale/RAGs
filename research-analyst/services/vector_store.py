@@ -17,7 +17,10 @@ import numpy as np
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_core.documents import Document as LangChainDocument
 from langchain_core.embeddings import Embeddings
-from langchain_community.embeddings import HuggingFaceEmbeddings
+try:
+    from langchain_huggingface import HuggingFaceEmbeddings
+except ImportError:
+    from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain_qdrant import QdrantVectorStore
 
 # Optional modern embedding providers
@@ -86,7 +89,7 @@ class VectorStoreService:
         try:
             # Determine embedding provider based on model name
             if "google" in settings.embedding_model.lower() or "gemini" in settings.embedding_model.lower():
-                if GOOGLE_AVAILABLE:
+                if GOOGLE_AVAILABLE and settings.google_api_key:
                     self.embeddings = GoogleGenerativeAIEmbeddings(
                         model=settings.embedding_model,
                         google_api_key=settings.google_api_key
@@ -97,10 +100,10 @@ class VectorStoreService:
                     self.embeddings = await self._init_huggingface_embeddings()
             
             elif "openai" in settings.embedding_model.lower() or "text-embedding" in settings.embedding_model.lower():
-                if OPENAI_AVAILABLE:
+                if OPENAI_AVAILABLE and settings.openai_api_key:
                     self.embeddings = OpenAIEmbeddings(
                         model=settings.embedding_model,
-                        openai_api_key=settings.openai_api_key
+                        api_key=settings.openai_api_key
                     )
                     logger.info("✅ Using OpenAI embeddings")
                 else:
@@ -141,30 +144,101 @@ class VectorStoreService:
         
         logger.info("✅ Modern text splitter initialized!")
     
+    async def _ensure_collections_exist(self):
+        """Ensure required collections exist in Qdrant."""
+        logger.info("🔍 Ensuring vector collections exist...")
+        
+        collections_config = {
+            "documents": {
+                "size": 768,  # Default embedding size
+                "distance": Distance.COSINE
+            },
+            "document_chunks": {
+                "size": 768,
+                "distance": Distance.COSINE
+            },
+            "query_cache": {
+                "size": 768,
+                "distance": Distance.COSINE
+            }
+        }
+        
+        for collection_name, config in collections_config.items():
+            try:
+                # Check if collection exists
+                await asyncio.get_event_loop().run_in_executor(
+                    None, self.qdrant_client.get_collection, collection_name
+                )
+                logger.info(f"✅ Collection '{collection_name}' already exists")
+            except Exception:
+                # Collection doesn't exist, create it
+                try:
+                    vector_params = VectorParams(
+                        size=config["size"],
+                        distance=config["distance"]
+                    )
+                    await asyncio.get_event_loop().run_in_executor(
+                        None, 
+                        self.qdrant_client.create_collection,
+                        collection_name,
+                        vector_params
+                    )
+                    logger.info(f"✅ Created collection '{collection_name}'")
+                except Exception as e:
+                    logger.warning(f"⚠️ Failed to create collection '{collection_name}': {e}")
+    
+    async def _create_fallback_vector_store_modern(self, collection_name: str) -> QdrantVectorStore:
+        """Create a fallback vector store using modern from_texts method."""
+        logger.info(f"🔧 Creating fallback vector store for '{collection_name}' with modern syntax...")
+        
+        # Create with empty texts to initialize the collection using modern syntax
+        def create_vector_store():
+            return QdrantVectorStore.from_texts(
+                texts=[""],  # Empty text to initialize
+                embedding=self.embeddings,  # embedding parameter
+                url=settings.qdrant_url,  # URL of the Qdrant server
+                collection_name=collection_name  # name of the collection
+            )
+        
+        fallback_store = await asyncio.get_event_loop().run_in_executor(None, create_vector_store)
+        
+        logger.info(f"✅ Created fallback vector store for '{collection_name}' with modern syntax")
+        return fallback_store
+    
     async def _init_vector_stores(self):
-        """Initialize QdrantVectorStore instances for different collections."""
-        logger.info("📚 Initializing QdrantVectorStore instances...")
+        """Initialize QdrantVectorStore instances using modern LangChain syntax."""
+        logger.info("📚 Initializing QdrantVectorStore instances with modern syntax...")
+        
+        # Ensure collections exist first
+        await self._ensure_collections_exist()
         
         collections = ["documents", "document_chunks", "query_cache"]
         
         for collection_name in collections:
             try:
-                # Create vector store instance
-                vector_store = QdrantVectorStore(
-                    client=self.qdrant_client,
-                    collection_name=collection_name,
-                    embeddings=self.embeddings,
-                    vector_name="content_vector",  # Modern practice: named vectors
-                    content_payload_key="content",
-                    metadata_payload_key="metadata"
+                # Use modern from_existing_collection syntax
+                vector_store = await asyncio.get_event_loop().run_in_executor(
+                    None,
+                    QdrantVectorStore.from_existing_collection,
+                    settings.qdrant_url,  # url parameter first
+                    collection_name,      # collection_name second
+                    self.embeddings       # embedding parameter third
                 )
                 
                 self.vector_stores[collection_name] = vector_store
-                logger.info(f"✅ Initialized vector store for '{collection_name}'")
+                logger.info(f"✅ Initialized vector store for '{collection_name}' with modern syntax")
                 
             except Exception as e:
-                logger.error(f"❌ Failed to initialize vector store for {collection_name}: {e}")
-                raise
+                logger.warning(f"⚠️ Failed to initialize vector store for {collection_name}: {e}")
+                # Create a fallback vector store using modern from_texts method
+                try:
+                    vector_store = await self._create_fallback_vector_store_modern(collection_name)
+                    self.vector_stores[collection_name] = vector_store
+                    logger.info(f"✅ Created fallback vector store for '{collection_name}' with modern syntax")
+                except Exception as fallback_error:
+                    logger.error(f"❌ Failed to create fallback for {collection_name}: {fallback_error}")
+                    # Continue with other collections
+                    continue
     
     async def create_document_embeddings(
         self, 
@@ -212,13 +286,15 @@ class VectorStoreService:
             # Use modern batch processing
             vector_store = self.vector_stores["document_chunks"]
             
-            # Add documents to vector store
+            # Add documents to vector store using modern syntax
+            chunk_ids = [f"{document_id}_chunk_{i}" for i in range(len(texts))]
             ids = await asyncio.get_event_loop().run_in_executor(
                 None,
-                vector_store.add_texts,
-                texts,
-                metadatas,
-                [f"{document_id}_chunk_{i}" for i in range(len(texts))]
+                lambda: vector_store.add_texts(
+                    texts=texts,
+                    metadatas=metadatas,
+                    ids=chunk_ids
+                )
             )
             
             # Create DocumentChunk objects for return
@@ -339,11 +415,12 @@ class VectorStoreService:
         
         try:
             # Use modern from_existing_collection pattern
-            vector_store = QdrantVectorStore.from_existing_collection(
-                embedding=embeddings,
-                collection_name=collection_name,
-                url=settings.qdrant_url,
-                api_key=getattr(settings, 'qdrant_api_key', None)
+            vector_store = await asyncio.get_event_loop().run_in_executor(
+                None,
+                QdrantVectorStore.from_existing_collection,
+                settings.qdrant_url,
+                collection_name,
+                embeddings
             )
             
             logger.info(f"✅ Connected to existing collection '{collection_name}'")

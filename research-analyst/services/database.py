@@ -190,6 +190,11 @@ class DatabaseManager:
         """Create required vector collections in Qdrant."""
         logger.info("📚 Creating vector collections...")
         
+        # Check if qdrant client is available
+        if self.qdrant_client is None:
+            logger.error("❌ Qdrant client is not available, cannot create collections")
+            raise RuntimeError("Qdrant client is not available")
+        
         collections_config = {
             "documents": {
                 "vectors": VectorParams(
@@ -211,22 +216,76 @@ class DatabaseManager:
             }
         }
         
+        successfully_created = []
+        failed_collections = []
+        
         for collection_name, config in collections_config.items():
             try:
                 # Check if collection exists
-                await asyncio.get_event_loop().run_in_executor(
-                    None, self.qdrant_client.get_collection, collection_name
-                )
-                logger.info(f"✅ Collection '{collection_name}' already exists")
-            except ResponseHandlingException:
-                # Collection doesn't exist, create it
-                await asyncio.get_event_loop().run_in_executor(
-                    None, 
-                    self.qdrant_client.create_collection,
-                    collection_name,
-                    config["vectors"]
-                )
-                logger.info(f"✅ Created collection '{collection_name}'")
+                collection_exists = False
+                
+                # Method 1: Try to get collection info
+                try:
+                    collection_info = await asyncio.get_event_loop().run_in_executor(
+                        None, self.qdrant_client.get_collection, collection_name
+                    )
+                    if collection_info:
+                        collection_exists = True
+                        logger.info(f"✅ Collection '{collection_name}' already exists")
+                        successfully_created.append(collection_name)
+                        continue
+                except Exception:
+                    # Collection doesn't exist, continue to creation
+                    pass
+                
+                # Method 2: Try to list collections and check
+                if not collection_exists:
+                    try:
+                        collections = await asyncio.get_event_loop().run_in_executor(
+                            None, self.qdrant_client.get_collections
+                        )
+                        if any(col.name == collection_name for col in collections.collections):
+                            collection_exists = True
+                            logger.info(f"✅ Collection '{collection_name}' found in collections list")
+                            successfully_created.append(collection_name)
+                            continue
+                    except Exception:
+                        # Continue to creation
+                        pass
+                
+                # Create collection if it doesn't exist
+                if not collection_exists:
+                    logger.info(f"🔧 Creating collection '{collection_name}'")
+                    await asyncio.get_event_loop().run_in_executor(
+                        None, 
+                        self.qdrant_client.create_collection,
+                        collection_name,
+                        config["vectors"]
+                    )
+                    logger.info(f"✅ Created collection '{collection_name}'")
+                    successfully_created.append(collection_name)
+                
+            except Exception as e:
+                logger.warning(f"⚠️ Failed to create collection '{collection_name}': {e}")
+                failed_collections.append((collection_name, str(e)))
+                # Continue with other collections instead of failing completely
+                continue
+        
+        # Report results
+        if successfully_created:
+            logger.info(f"✅ Successfully created/verified {len(successfully_created)} collections: {successfully_created}")
+        
+        if failed_collections:
+            logger.warning(f"⚠️ Failed to create {len(failed_collections)} collections:")
+            for name, error in failed_collections:
+                logger.warning(f"   - {name}: {error}")
+        
+        # Don't fail if at least one collection was created
+        if not successfully_created:
+            logger.error("❌ No collections could be created or verified")
+            raise Exception("Failed to create any vector collections")
+        
+        logger.info("📚 Vector collections setup complete")
     
     async def get_db_session(self) -> AsyncGenerator[AsyncSession, None]:
         """
@@ -269,6 +328,9 @@ class DatabaseManager:
         if not self._initialized:
             raise RuntimeError("Database not initialized. Call initialize() first.")
         
+        if self.qdrant_client is None:
+            raise RuntimeError("Qdrant client is not available. Database initialization failed.")
+        
         return self.qdrant_client
     
     async def health_check(self) -> dict:
@@ -285,10 +347,12 @@ class DatabaseManager:
         
         # Check traditional database
         try:
-            async with self.get_db_session() as session:
-                result = await session.execute("SELECT 1")
+            async for session in self.get_db_session():
+                from sqlalchemy import text
+                result = await session.execute(text("SELECT 1"))
                 health["traditional_db"] = True
                 health["details"]["traditional_db"] = "Connected"
+                break  # Only need one iteration
         except Exception as e:
             health["details"]["traditional_db"] = f"Error: {str(e)}"
         
