@@ -6,213 +6,91 @@
 
 Transform your documents into an intelligent knowledge base! Upload PDFs, ask questions, and get AI-powered answers with real-time web search integration.
 
-## 🚀 Features
+## 🎯 What You Can Do
 
-- **LangChain Integration**: Unified AI workflow orchestration
-- **Hybrid RAG**: Combines document and web search
-- **Tavily Web Search**: Real-time web search via LangChain
-- **FlashRank**: Ultra-fast cross-encoder re-ranking
-- **Multi-level Chunking**: 128/512/2048 tokens for different contexts
-- **Google Gemini Integration**: Advanced LLM with Gemini 2.0 Flash
-- **Qdrant Vector Database**: Production-grade vector storage
-- **Redis Caching**: Intelligent caching with TTL
-- **FastAPI Backend**: Modern async web framework
-- **Streamlit Frontend**: Simple web interface
+✅ **Upload Documents** - PDF, TXT, DOCX files  
+✅ **Ask Questions** - Get AI-powered answers from your documents  
+✅ **Web Search Integration** - Real-time web search for latest information  
+✅ **Smart Citations** - See exactly where answers come from  
+✅ **Hybrid Search** - Combines document knowledge + live web data  
 
-## 🛠️ Technology Stack
+## ⚡ Quick Start (2 Minutes Setup!)
 
-- **Framework**: LangChain for AI orchestration
-- **Vector DB**: Qdrant for embeddings storage
-- **Web Search**: Tavily API via LangChain
-- **Re-ranking**: FlashRank cross-encoder
-- **LLM**: Google Gemini 2.0 Flash
-- **Embeddings**: sentence-transformers/bge-large-en-v1.5 (with Google embeddings fallback)
-- **Caching**: Redis
-- **Package Manager**: uv
+### 1️⃣ **Get API Keys** (Free!)
+- 🔑 **Gemini API**: Get free key at [Google AI Studio](https://makersuite.google.com/app/apikey)
+- 🌐 **Tavily API**: Get free key at [Tavily.com](https://tavily.com/)
 
-## 📋 Prerequisites
-
-- Python 3.12+
-- [uv package manager](https://docs.astral.sh/uv/)
-- Redis server
-- Qdrant vector database
-- API keys for Google Gemini and Tavily
-
-## 🔧 Installation
-
-### 1. Clone the Repository
-
+### 2️⃣ **Install & Run**
 ```bash
-git clone <repository-url>
+# Clone the project
+git clone <your-repo-url>
 cd research-analyst
-```
 
-### 2. Install Dependencies
-
-```bash
-# Install all dependencies using uv
+# Install everything (one command!)
 uv sync
+
+# Create your .env file
+echo "GEMINI_API_KEY=your_gemini_key_here" > .env
+echo "TAVILY_API_KEY=your_tavily_key_here" >> .env
+
+# Start the app (it handles everything automatically!)
+python main.py
 ```
 
-### 3. Environment Configuration
+### 3️⃣ **Start Using!**
+🌐 **Open**: http://localhost:8000/docs  
+📁 **Upload**: Your PDF/TXT documents  
+💬 **Ask**: Questions about your documents  
+🚀 **Get**: AI-powered answers with citations!  
 
-Create a `.env` file in the root directory:
+## 🎯 Simple Usage Example
 
-```env
-# API Keys (Required)
-GEMINI_API_KEY=your_gemini_api_key_here
-TAVILY_API_KEY=your_tavily_api_key_here
+1. **Upload a Document**: 
+   - Go to http://localhost:8000/docs
+   - Try `POST /documents/upload`
+   - Upload your PDF file
 
-# Optional API Keys (for enhanced functionality)
-GOOGLE_API_KEY=your_google_api_key_here  # For Google embeddings (optional)
+2. **Ask Questions**:
+   - Try `POST /query` 
+   - Ask: *"What are the main points in my document?"*
+   - Get instant AI answers with sources!
 
-# Database Configuration
-QDRANT_URL=http://localhost:6333
-REDIS_URL=redis://localhost:6379
+## 💪 Advanced Features
 
-# Development Settings
-DEBUG=false
-DEVELOPMENT=true
-HOST=127.0.0.1
-PORT=8000
-```
+- **🔄 Real-time Web Search**: Get latest information beyond your documents
+- **🧠 Smart Chunking**: Optimized text processing for better answers
+- **📊 Health Monitoring**: Check system status at `/health`
+- **🔍 Hybrid Search**: Document + Web results combined intelligently
 
-### 4. Start Dependencies
+## 🛠️ Tech Stack
 
-#### Option A: Using Docker (Recommended)
-```bash
-# Start Qdrant
-docker run -p 6333:6333 qdrant/qdrant
+- **🤖 AI**: Google Gemini 2.0 Flash + LangChain
+- **🔍 Search**: Tavily API for real-time web search  
+- **📊 Vector DB**: Qdrant (auto-fallback to in-memory)
+- **⚡ Backend**: FastAPI with async processing
+- **📝 Embeddings**: all-MiniLM-L6-v2 (384d, fast & accurate)
 
-# Start Redis
-docker run -p 6379:6379 redis:latest
-```
+## 🔧 Troubleshooting
 
-#### Option B: Local Installation
-- Install [Qdrant](https://qdrant.tech/documentation/guides/installation/)
-- Install [Redis](https://redis.io/docs/getting-started/installation/)
+**App won't start?**
+- Make sure you have Python 3.12+
+- Check your API keys in `.env` file
+- Run `uv sync` to install dependencies
 
-## 🚀 Usage
+**No documents showing up?**
+- Check the `/health` endpoint for system status
+- Documents are processed automatically after upload
 
-### 1. Test Configuration
+**Questions not working?**
+- Verify your Gemini API key is valid
+- Check if documents are processed (status in response)
 
-```bash
-uv run python core/config.py
-```
+## 📖 Learn More
 
-### 2. Start the API Server
+- **API Docs**: http://localhost:8000/docs (interactive!)
+- **System Health**: http://localhost:8000/health
+- **Built with**: [LangChain](https://langchain.com) + [FastAPI](https://fastapi.tiangolo.com)
 
-```bash
-uv run python main.py
-```
+---
 
-### 3. Access the API
-
-- **API Documentation**: http://localhost:8000/docs
-- **Health Check**: http://localhost:8000/health
-- **Configuration**: http://localhost:8000/config (dev mode only)
-
-### 4. Start the Frontend (Coming Soon)
-
-```bash
-uv run streamlit run frontend/app.py
-```
-
-## 🔑 API Keys Setup
-
-### Google Gemini API Key (Required)
-1. Go to [Google AI Studio](https://makersuite.google.com/app/apikey)
-2. Create a new API key
-3. Add to `.env` file: `GEMINI_API_KEY=your_key_here`
-
-### Tavily API Key (Required)
-1. Go to [Tavily](https://tavily.com/)
-2. Sign up and get your API key
-3. Add to `.env` file: `TAVILY_API_KEY=your_key_here`
-
-### Google API Key (Optional)
-1. Same as Gemini API key (can use the same key)
-2. Used for Google embeddings (fallback to HuggingFace if not provided)
-3. Add to `.env` file: `GOOGLE_API_KEY=your_key_here`
-
-## 📊 Current Status
-
-**Phase 1: Foundation & Core Setup** ✅
-- [x] Project initialization with uv
-- [x] FastAPI application structure
-- [x] LangChain integration setup
-- [x] Configuration management
-- [x] Basic logging system
-- [x] Pydantic models for data validation
-
-**Phase 2: Database Setup** 🔄 (In Progress)
-- [ ] Qdrant vector database setup
-- [ ] Document storage schema
-- [ ] Basic CRUD operations
-
-**Next Steps:**
-- Vector database integration
-- Document upload system
-- Text processing with LangChain
-- Web search with Tavily
-
-## 🧪 Testing
-
-```bash
-# Run all tests
-uv run pytest
-
-# Run with coverage
-uv run pytest --cov
-
-# Run specific test file
-uv run pytest tests/test_config.py
-```
-
-## 🏗️ Architecture
-
-```
-research-analyst/
-├── core/                   # Core system components
-│   ├── config.py          # Configuration management
-│   ├── models.py          # Pydantic data models
-│   └── database.py        # Database connections
-├── services/              # Business logic services
-│   ├── langchain_llm_service.py
-│   ├── tavily_search_service.py
-│   └── embedding_service.py
-├── utils/                 # Utility functions
-│   ├── logger.py          # Logging configuration
-│   └── helpers.py         # Helper functions
-├── api/                   # API endpoints
-├── frontend/              # Streamlit frontend
-├── tests/                 # Test suites
-└── main.py               # FastAPI application
-```
-
-## 📚 Documentation
-
-- [API Documentation](http://localhost:8000/docs) (when server is running)
-- [LangChain Documentation](https://python.langchain.com/docs/get_started/introduction)
-- [Tavily API Documentation](https://docs.tavily.com/)
-- [FlashRank Documentation](https://github.com/PrithivirajDamodaran/FlashRank)
-
-## 🤝 Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Add tests
-5. Submit a pull request
-
-## 📄 License
-
-This project is licensed under the MIT License.
-
-## 🔗 Links
-
-- [LangChain](https://python.langchain.com/)
-- [Tavily](https://tavily.com/)
-- [FlashRank](https://github.com/PrithivirajDamodaran/FlashRank)
-- [Qdrant](https://qdrant.tech/)
-- [FastAPI](https://fastapi.tiangolo.com/)
+**🎉 Ready to transform your documents into an AI assistant? Get started in 2 minutes!**
