@@ -9,7 +9,7 @@ Advanced Research Assistant that combines document analysis with real-time web s
 - **Tavily Web Search**: Real-time web search via LangChain
 - **FlashRank**: Ultra-fast cross-encoder re-ranking
 - **Multi-level Chunking**: 128/512/2048 tokens for different contexts
-- **Multi-model Support**: GPT-4, Gemini Pro with fallbacks
+- **Google Gemini Integration**: Advanced LLM with Gemini 2.0 Flash
 - **Qdrant Vector Database**: Production-grade vector storage
 - **Redis Caching**: Intelligent caching with TTL
 - **FastAPI Backend**: Modern async web framework
@@ -21,8 +21,8 @@ Advanced Research Assistant that combines document analysis with real-time web s
 - **Vector DB**: Qdrant for embeddings storage
 - **Web Search**: Tavily API via LangChain
 - **Re-ranking**: FlashRank cross-encoder
-- **LLM**: Google Gemini Pro
-- **Embeddings**: sentence-transformers/bge-large-en-v1.5
+- **LLM**: Google Gemini 2.0 Flash
+- **Embeddings**: sentence-transformers/bge-large-en-v1.5 (with Google embeddings fallback)
 - **Caching**: Redis
 - **Package Manager**: uv
 
@@ -58,6 +58,9 @@ Create a `.env` file in the root directory:
 # API Keys (Required)
 GEMINI_API_KEY=your_gemini_api_key_here
 TAVILY_API_KEY=your_tavily_api_key_here
+
+# Optional API Keys (for enhanced functionality)
+GOOGLE_API_KEY=your_google_api_key_here  # For Google embeddings (optional)
 
 # Database Configuration
 QDRANT_URL=http://localhost:6333
@@ -113,15 +116,20 @@ uv run streamlit run frontend/app.py
 
 ## 🔑 API Keys Setup
 
-### Google Gemini API Key
+### Google Gemini API Key (Required)
 1. Go to [Google AI Studio](https://makersuite.google.com/app/apikey)
 2. Create a new API key
 3. Add to `.env` file: `GEMINI_API_KEY=your_key_here`
 
-### Tavily API Key
+### Tavily API Key (Required)
 1. Go to [Tavily](https://tavily.com/)
 2. Sign up and get your API key
 3. Add to `.env` file: `TAVILY_API_KEY=your_key_here`
+
+### Google API Key (Optional)
+1. Same as Gemini API key (can use the same key)
+2. Used for Google embeddings (fallback to HuggingFace if not provided)
+3. Add to `.env` file: `GOOGLE_API_KEY=your_key_here`
 
 ## 📊 Current Status
 

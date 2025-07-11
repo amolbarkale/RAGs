@@ -31,8 +31,8 @@ logger = logging.getLogger(__name__)
 # SQLAlchemy Database Setup (Traditional DB)
 # ==============================================
 
-# Create the base class for SQLAlchemy models
-Base = declarative_base()
+# Import the base class from models to avoid circular imports
+from services.models import Base
 
 # Database metadata
 metadata = MetaData()
@@ -144,10 +144,11 @@ class DatabaseManager:
         """Create all database tables."""
         logger.info("🏗️  Creating database tables...")
         
-        # Import all models to ensure they're registered
+        # Import models inside function to avoid circular import issues
+        # This ensures all models are registered with Base.metadata
         from services.models import (
             DocumentDBModel, DocumentChunkDBModel, 
-            QueryHistoryDBModel, UserDBModel
+            QueryHistoryDBModel, UserDBModel, DocumentTagDBModel, SystemMetricsDBModel, CacheEntryDBModel
         )
         
         # Create tables asynchronously

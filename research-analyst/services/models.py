@@ -13,8 +13,8 @@ from datetime import datetime
 from typing import Optional, List, Dict, Any
 import uuid
 
-# Import the Base from database.py
-from services.database import Base
+# Create Base for SQLAlchemy models
+Base = declarative_base()
 
 # ==============================================
 # Database Models (SQLAlchemy)
@@ -82,7 +82,7 @@ class DocumentDBModel(Base, TimestampMixin):
     processed_text = Column(Text, nullable=True)
     
     # Document metadata (stored as JSON)
-    metadata = Column(JSON, nullable=True)
+    document_metadata = Column(JSON, nullable=True)
     
     # Processing status
     is_processed = Column(Boolean, default=False, nullable=False)
@@ -132,7 +132,7 @@ class DocumentChunkDBModel(Base, TimestampMixin):
     embedding_model = Column(String(100), nullable=True)
     
     # Chunk metadata
-    metadata = Column(JSON, nullable=True)
+    chunk_metadata = Column(JSON, nullable=True)
     
     # Quality scores
     content_quality_score = Column(Float, default=0.0, nullable=False)
@@ -207,7 +207,7 @@ class DocumentTagDBModel(Base, TimestampMixin):
     confidence_score = Column(Float, default=1.0, nullable=False)
     
     # Tag metadata
-    metadata = Column(JSON, nullable=True)
+    tag_metadata = Column(JSON, nullable=True)
     
     def __repr__(self):
         return f"<DocumentTag(doc_id={self.document_id}, tag={self.tag_name})>"
@@ -228,7 +228,7 @@ class SystemMetricsDBModel(Base, TimestampMixin):
     metric_unit = Column(String(50), nullable=True)
     
     # Metric metadata
-    metadata = Column(JSON, nullable=True)
+    metrics_metadata = Column(JSON, nullable=True)
     
     # Aggregation period
     period_start = Column(DateTime, nullable=True)

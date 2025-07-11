@@ -138,17 +138,25 @@ class Settings(BaseSettings):
         
         if not self.gemini_api_key:
             missing_keys.append("GEMINI_API_KEY")
-        if not self.google_api_key:
-            missing_keys.append("GOOGLE_API_KEY")
-        if not self.openai_api_key:
-            missing_keys.append("OPENAI_API_KEY")
         if not self.tavily_api_key:
             missing_keys.append("TAVILY_API_KEY")
             
         if missing_keys:
             print(f"⚠️  Warning: Missing API keys: {', '.join(missing_keys)}")
             print("Some features may not work properly.")
-            print("🔧 Available providers will be used when API keys are missing.")
+        else:
+            print("✅ All required API keys are configured!")
+            
+        # Optional keys (for enhanced functionality)
+        optional_keys = []
+        if not self.google_api_key:
+            optional_keys.append("GOOGLE_API_KEY (for Google embeddings)")
+        if not self.openai_api_key:
+            optional_keys.append("OPENAI_API_KEY (for OpenAI embeddings fallback)")
+            
+        if optional_keys:
+            print(f"ℹ️  Optional API keys not configured: {', '.join(optional_keys)}")
+            print("🔧 System will use HuggingFace embeddings as fallback.")
             
     def get_database_url(self) -> str:
         """Get the database connection URL."""

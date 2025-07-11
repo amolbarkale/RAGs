@@ -41,6 +41,9 @@ from services.database import db_manager, get_db, get_vector_db
 from services.vector_store import VectorStoreService, create_vector_store
 from services.models import DocumentDBModel, DocumentChunkDBModel
 from services.document_processor import ProductionDocumentProcessor, create_document_processor, detect_file_type
+from services.search_service import SearchService, create_search_service
+from services.langchain_llm_service import create_llm_service
+from services.tavily_search_service import create_tavily_service
 
 
 # ==============================================
@@ -72,9 +75,24 @@ async def lifespan(app: FastAPI):
     print("🚀 Initializing production document processor...")
     document_processor = await create_document_processor(vector_store)
     
+    # Initialize LLM service
+    print("🤖 Initializing LLM service with Gemini...")
+    llm_service = await create_llm_service()
+    
+    # Initialize Tavily web search service
+    print("🌐 Initializing Tavily web search service...")
+    tavily_service = await create_tavily_service()
+    
+    # Initialize search service
+    print("🔍 Initializing search service...")
+    search_service = await create_search_service(vector_store)
+    
     # Store services in app state for access in endpoints
     app.state.vector_store = vector_store
     app.state.document_processor = document_processor
+    app.state.search_service = search_service
+    app.state.llm_service = llm_service
+    app.state.tavily_service = tavily_service
     
     # Check database health
     health = await db_manager.health_check()
@@ -90,6 +108,10 @@ async def lifespan(app: FastAPI):
     
     # Shutdown
     print("🔄 Shutting down Research Assistant...")
+    
+    # Cleanup Tavily service
+    if hasattr(app.state, 'tavily_service') and app.state.tavily_service:
+        await app.state.tavily_service.cleanup()
     
     # Cleanup database connections
     await db_manager.close()
@@ -474,55 +496,27 @@ async def process_query(
     user: Optional[dict] = Depends(get_current_user)
 ) -> QueryResponse:
     """
-    Process a user query with automatic Pydantic validation.
+    Process a user query using the production search service.
     
-    For beginners: QueryRequest is already validated by Pydantic!
+    This endpoint performs hybrid search across documents and web sources,
+    then generates a comprehensive response with citations.
     """
-    # All validation is automatic - no manual checks needed!
-    
-    # TODO: Implement actual RAG processing
-    # For now, return mock response
-    
-    mock_sources = [
-        SearchResult(
-            title="AI Industry Report 2024",
-            content="The AI industry is experiencing unprecedented growth...",
-            source_type=SourceType.DOCUMENT,
-            relevance_score=0.92,
-            dense_score=0.88,
-            sparse_score=0.85,
-            freshness_score=0.95,
-            source_name="AI Industry Report 2024"
-        ),
-        SearchResult(
-            title="Latest AI Breakthrough",
-            content="Researchers announce new AI breakthrough...",
-            source_type=SourceType.WEB,
-            relevance_score=0.87,
-            dense_score=0.83,
-            sparse_score=0.78,
-            freshness_score=0.99,
-            source_name="Science Daily",
-            url="https://sciencedaily.com/ai-breakthrough"
+    try:
+        # Get search service from app state
+        search_service: SearchService = app.state.search_service
+        
+        # Process the query using the search service
+        response = await search_service.process_query(query_request)
+        
+        logger.info(f"✅ Query processed successfully: {response.result_count} results, {response.processing_time:.2f}s")
+        return response
+        
+    except Exception as e:
+        logger.error(f"❌ Query processing failed: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Query processing failed: {str(e)}"
         )
-    ]
-    
-    # Determine response strategy based on similarity
-    max_similarity = max(source.relevance_score for source in mock_sources)
-    response_strategy = QueryResponse.determine_response_strategy(max_similarity)
-    
-    return QueryResponse(
-        query=query_request.query,
-        answer="Based on the latest AI industry reports and research, artificial intelligence is transforming multiple sectors...",
-        sources=mock_sources,
-        confidence_score=0.89,
-        processing_time=1.2,
-        response_strategy=response_strategy,
-        max_similarity_score=max_similarity,
-        query_type=query_request.query_type,
-        result_count=len(mock_sources),
-        citations=["AI Industry Report 2024", "Science Daily"]
-    )
 
 
 @app.post("/search", response_model=List[HybridSearchResult])
@@ -531,61 +525,27 @@ async def hybrid_search(
     user: Optional[dict] = Depends(get_current_user)
 ) -> List[HybridSearchResult]:
     """
-    Perform hybrid search with automatic Pydantic validation.
+    Perform hybrid search using the production search service.
     
-    For beginners: This shows how to replace query parameters with 
-    a validated request model.
+    This endpoint searches across documents and web sources based on the
+    search request parameters, returning structured results with scoring.
     """
-    # All validation is handled automatically by Pydantic!
-    
-    # TODO: Implement actual hybrid search
-    # For now, return mock results
-    
-    doc_result = SearchResult(
-        title="AI Industry Report 2024",
-        content="Artificial intelligence is transforming industries...",
-        source_type=SourceType.DOCUMENT,
-        relevance_score=0.92,
-        dense_score=0.88,
-        sparse_score=0.85,
-        freshness_score=0.95,
-        source_name="AI Industry Report 2024"
-    )
-    
-    web_result = SearchResult(
-        title="AI Breakthrough News",
-        content="Latest AI breakthrough announced by researchers...",
-        source_type=SourceType.WEB,
-        relevance_score=0.87,
-        dense_score=0.83,
-        sparse_score=0.78,
-        freshness_score=0.99,
-        source_name="Science Daily",
-        url="https://sciencedaily.com/ai-breakthrough"
-    )
-    
-    # Build results based on search request
-    document_results = [doc_result] if search_request.include_documents else []
-    web_results = [web_result] if search_request.include_web else []
-    combined_results = document_results + web_results
-    
-    # Filter by minimum relevance score
-    filtered_results = [r for r in combined_results 
-                       if r.relevance_score >= search_request.min_relevance_score]
-    
-    mock_results = [
-        HybridSearchResult(
-            document_results=document_results,
-            web_results=web_results,
-            combined_results=filtered_results[:search_request.limit],
-            total_results=len(filtered_results),
-            search_time=0.5,
-            response_strategy=ResponseStrategy.MIXED,
-            max_document_similarity=0.85
+    try:
+        # Get search service from app state
+        search_service: SearchService = app.state.search_service
+        
+        # Perform hybrid search using the search service
+        results = await search_service.hybrid_search(search_request)
+        
+        logger.info(f"✅ Hybrid search completed: {len(results)} result sets")
+        return results
+        
+    except Exception as e:
+        logger.error(f"❌ Hybrid search failed: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Hybrid search failed: {str(e)}"
         )
-    ]
-    
-    return mock_results
 
 
 # ==============================================
