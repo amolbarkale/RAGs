@@ -1,9 +1,11 @@
+# src/train.py
+
 import os
-import glob
 import joblib
 import numpy as np
 import pandas as pd
-from data_loader import load_and_prepare_data
+
+from data_loader import load_hf_datasets
 from embedding_models import (
     load_word_vectors,
     embed_avg_word2vec,
@@ -15,78 +17,112 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import accuracy_score, precision_recall_fscore_support
 
 
-def evaluate(clf, X_test, y_test):
-    preds = clf.predict(X_test)
-    acc = accuracy_score(y_test, preds)
-    prec, rec, f1, _ = precision_recall_fscore_support(
-        y_test, preds, average="weighted"
+def evaluate_model_performance(classifier, test_embeddings: np.ndarray, test_labels: list):
+    """
+    Evaluate a trained classifier on test data.
+
+    Returns:
+        Tuple of (accuracy, precision, recall, f1_score)
+    """
+    predictions = classifier.predict(test_embeddings)
+    accuracy = accuracy_score(test_labels, predictions)
+    precision, recall, f1_score, _ = precision_recall_fscore_support(
+        test_labels, predictions, average="weighted"
     )
-    return acc, prec, rec, f1
+    return accuracy, precision, recall, f1_score
 
 
 def main():
-    # Paths
-    base_dir = os.path.dirname(__file__)
-    data_pattern = os.path.join(base_dir, "../data/*.csv")
-    w2v_path = os.path.join(base_dir, "../models/GoogleNews-vectors-negative300.bin")
-    output_dir = os.path.join(base_dir, "../models")
-    os.makedirs(output_dir, exist_ok=True)
+    # Project paths
+    project_root = os.path.dirname(__file__)
+    word2vec_file = os.path.join(project_root, "../models/GoogleNews-vectors-negative300.bin")
+    models_output_dir = os.path.join(project_root, "../models")
+    os.makedirs(models_output_dir, exist_ok=True)
 
-    # Load and split data
-    X_train, X_test, y_train, y_test = load_and_prepare_data(data_pattern)
+    # Load and split data from HuggingFace datasets
+    training_texts, testing_texts, training_labels, testing_labels = load_hf_datasets()
 
-    results = []
+    performance_records = []
 
-    # Word2Vec
-    print("[Train] Word2Vec embeddings")
-    w2v = load_word_vectors(w2v_path)
-    X_tr_w2v = embed_avg_word2vec(X_train, w2v)
-    X_te_w2v = embed_avg_word2vec(X_test,  w2v)
-    clf_w2v = LogisticRegression(max_iter=1000)
-    clf_w2v.fit(X_tr_w2v, y_train)
-    metrics = evaluate(clf_w2v, X_te_w2v, y_test)
-    results.append(("Word2Vec", *metrics))
-    joblib.dump(clf_w2v, os.path.join(output_dir, "clf_w2v.joblib"))
+    # 1) Word2Vec Embeddings + Classifier
+    print("[Training] Word2Vec embeddings and classifier")
+    word2vec_model = load_word_vectors(word2vec_file)
+    train_w2v_embeddings = embed_avg_word2vec(training_texts, word2vec_model)
+    test_w2v_embeddings  = embed_avg_word2vec(testing_texts,  word2vec_model)
 
-    # BERT [CLS]
-    print("[Train] BERT [CLS] embeddings")
-    X_tr_bert = embed_bert_cls(X_train)
-    X_te_bert = embed_bert_cls(X_test)
-    clf_bert = LogisticRegression(max_iter=1000)
-    clf_bert.fit(X_tr_bert, y_train)
-    metrics = evaluate(clf_bert, X_te_bert, y_test)
-    results.append(("BERT", *metrics))
-    joblib.dump(clf_bert, os.path.join(output_dir, "clf_bert.joblib"))
+    w2v_classifier = LogisticRegression(max_iter=1000)
+    w2v_classifier.fit(train_w2v_embeddings, training_labels)
 
-    # Sentence-BERT
-    print("[Train] Sentence-BERT embeddings")
-    X_tr_sbert = embed_sentence_bert(X_train)
-    X_te_sbert = embed_sentence_bert(X_test)
-    clf_sbert = LogisticRegression(max_iter=1000)
-    clf_sbert.fit(X_tr_sbert, y_train)
-    metrics = evaluate(clf_sbert, X_te_sbert, y_test)
-    results.append(("SBERT", *metrics))
-    joblib.dump(clf_sbert, os.path.join(output_dir, "clf_sbert.joblib"))
-
-    # OpenAI
-    # print("[Train] OpenAI embeddings")
-    # X_tr_oa = embed_openai(X_train)
-    # X_te_oa = embed_openai(X_test)
-    # clf_oa = LogisticRegression(max_iter=1000)
-    # clf_oa.fit(X_tr_oa, y_train)
-    # metrics = evaluate(clf_oa, X_te_oa, y_test)
-    # results.append(("OpenAI", *metrics))
-    # joblib.dump(clf_oa, os.path.join(output_dir, "clf_openai.joblib"))
-
-    # Save performance report
-    df = pd.DataFrame(
-        results,
-        columns=["Model", "Accuracy", "Precision", "Recall", "F1"]
+    w2v_metrics = evaluate_model_performance(
+        w2v_classifier, test_w2v_embeddings, testing_labels
     )
-    report_path = os.path.join(base_dir, "../results/performance_comparison.csv")
-    os.makedirs(os.path.dirname(report_path), exist_ok=True)
-    df.to_csv(report_path, index=False)
-    print("Training complete. Results saved to:", report_path)
+    performance_records.append(("Word2Vec", *w2v_metrics))
+    joblib.dump(
+        w2v_classifier,
+        os.path.join(models_output_dir, "classifier_word2vec.joblib")
+    )
+
+    # 2) BERT [CLS] Token Embeddings + Classifier
+    print("[Training] BERT [CLS] embeddings and classifier")
+    train_bert_embeddings = embed_bert_cls(training_texts)
+    test_bert_embeddings  = embed_bert_cls(testing_texts)
+
+    bert_classifier = LogisticRegression(max_iter=1000)
+    bert_classifier.fit(train_bert_embeddings, training_labels)
+
+    bert_metrics = evaluate_model_performance(
+        bert_classifier, test_bert_embeddings, testing_labels
+    )
+    performance_records.append(("BERT_CLS", *bert_metrics))
+    joblib.dump(
+        bert_classifier,
+        os.path.join(models_output_dir, "classifier_bert_cls.joblib")
+    )
+
+    # 3) Sentence-BERT Embeddings + Classifier
+    print("[Training] Sentence-BERT embeddings and classifier")
+    train_sbert_embeddings = embed_sentence_bert(training_texts)
+    test_sbert_embeddings  = embed_sentence_bert(testing_texts)
+
+    sbert_classifier = LogisticRegression(max_iter=1000)
+    sbert_classifier.fit(train_sbert_embeddings, training_labels)
+
+    sbert_metrics = evaluate_model_performance(
+        sbert_classifier, test_sbert_embeddings, testing_labels
+    )
+    performance_records.append(("SentenceBERT", *sbert_metrics))
+    joblib.dump(
+        sbert_classifier,
+        os.path.join(models_output_dir, "classifier_sentencebert.joblib")
+    )
+
+    # 4) OpenAI Ada Embeddings + Classifier
+    # print("[Training] OpenAI text-embedding-ada-002 embeddings and classifier")
+    # train_oa_embeddings = embed_openai(training_texts)
+    # test_oa_embeddings  = embed_openai(testing_texts)
+
+    # openai_classifier = LogisticRegression(max_iter=1000)
+    # openai_classifier.fit(train_oa_embeddings, training_labels)
+
+    # openai_metrics = evaluate_model_performance(
+    #     openai_classifier, test_oa_embeddings, testing_labels
+    # )
+    # performance_records.append(("OpenAI_Ada", *openai_metrics))
+    # joblib.dump(
+    #     openai_classifier,
+    #     os.path.join(models_output_dir, "classifier_openai_ada.joblib")
+    # )
+
+    # Save performance report to CSV
+    performance_df = pd.DataFrame(
+        performance_records,
+        columns=["EmbeddingType", "Accuracy", "Precision", "Recall", "F1Score"]
+    )
+    report_file = os.path.join(project_root, "../results/embedding_performance.csv")
+    os.makedirs(os.path.dirname(report_file), exist_ok=True)
+    performance_df.to_csv(report_file, index=False)
+
+    print(f"Training complete. Performance report saved to: {report_file}")
 
 
 if __name__ == "__main__":
