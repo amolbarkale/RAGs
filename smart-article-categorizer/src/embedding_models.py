@@ -81,18 +81,18 @@ def embed_sentence_bert(texts: List[str]) -> np.ndarray:
 
 
 # --- OpenAI Embeddings (text-embedding-ada-002) via LangChain ---
-from langchain.embeddings import OpenAIEmbeddings
+# from langchain.embeddings import OpenAIEmbeddings
 
-openai_embedder = OpenAIEmbeddings(model="text-embedding-ada-002")
+# openai_embedder = OpenAIEmbeddings(model="text-embedding-ada-002")
 
-def embed_openai(texts: List[str]) -> np.ndarray:
-    """
-    Use OpenAI's text-embedding-ada-002 model for document embeddings.
+# def embed_openai(texts: List[str]) -> np.ndarray:
+#     """
+#     Use OpenAI's text-embedding-ada-002 model for document embeddings.
 
-    Args:
-        texts: List of raw text documents
-    Returns:
-        2D numpy array of shape (n_texts, embedding_dim)
-    """
-    embeddings = openai_embedder.embed_documents(texts)
-    return np.array(embeddings)
+#     Args:
+#         texts: List of raw text documents
+#     Returns:
+#         2D numpy array of shape (n_texts, embedding_dim)
+#     """
+#     embeddings = openai_embedder.embed_documents(texts)
+#     return np.array(embeddings)

@@ -9,7 +9,7 @@ from embedding_models import (
     embed_avg_word2vec,
     embed_bert_cls,
     embed_sentence_bert,
-    embed_openai
+    # embed_openai
 )
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import accuracy_score, precision_recall_fscore_support
@@ -69,14 +69,14 @@ def main():
     joblib.dump(clf_sbert, os.path.join(output_dir, "clf_sbert.joblib"))
 
     # OpenAI
-    print("[Train] OpenAI embeddings")
-    X_tr_oa = embed_openai(X_train)
-    X_te_oa = embed_openai(X_test)
-    clf_oa = LogisticRegression(max_iter=1000)
-    clf_oa.fit(X_tr_oa, y_train)
-    metrics = evaluate(clf_oa, X_te_oa, y_test)
-    results.append(("OpenAI", *metrics))
-    joblib.dump(clf_oa, os.path.join(output_dir, "clf_openai.joblib"))
+    # print("[Train] OpenAI embeddings")
+    # X_tr_oa = embed_openai(X_train)
+    # X_te_oa = embed_openai(X_test)
+    # clf_oa = LogisticRegression(max_iter=1000)
+    # clf_oa.fit(X_tr_oa, y_train)
+    # metrics = evaluate(clf_oa, X_te_oa, y_test)
+    # results.append(("OpenAI", *metrics))
+    # joblib.dump(clf_oa, os.path.join(output_dir, "clf_openai.joblib"))
 
     # Save performance report
     df = pd.DataFrame(
