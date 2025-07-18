@@ -1,0 +1,12 @@
+numpy
+pandas
+scikit-learn
+gensim
+torch
+transformers
+sentence-transformers
+langchain
+openai
+streamlit
+umap-learn
+plotly
