@@ -1,3 +1,5 @@
+![Sales Conversion Predictor Banner](image.png)
+
 # 🔮 Fine-Tuned Sales Conversion Predictor
 
 A machine learning project that predicts sales call outcomes using fine-tuned BERT embeddings and contrastive learning. The project compares baseline SBERT models with custom fine-tuned BERT models to predict whether a sales call will result in a "won" or "lost" outcome.
