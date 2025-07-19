@@ -12,6 +12,7 @@ import joblib
 SCRIPT_DIR   = os.path.dirname(__file__)
 PROJECT_ROOT = os.path.abspath(os.path.join(SCRIPT_DIR, ".."))
 DATA_PATH    = os.path.join(PROJECT_ROOT, "data", "sales_transcripts.csv")
+MODELS_DIR   = os.path.join(PROJECT_ROOT, "models")
 
 def run_sbert_baseline():
     """
@@ -45,13 +46,11 @@ def run_sbert_baseline():
     print("=== Baseline SBERT Classification Report ===")
     print(classification_report(test_labels, test_predictions))
 
-    os.makedirs(MODEL_DIR, exist_ok=True)
-    joblib.dump(
-        baseline_classifier,
-        os.path.join(MODEL_DIR, "clf_sbert_base.joblib")
-    )
-    print(f"✅ Saved SBERT classifier to models/clf_sbert_base.joblib")
-
+    # 6) Save the classifier
+    os.makedirs(MODELS_DIR, exist_ok=True)
+    classifier_path = os.path.join(MODELS_DIR, "clf_sbert_base.joblib")
+    joblib.dump(baseline_classifier, classifier_path)
+    print(f"\n✅ SBERT classifier saved to: {classifier_path}")
 
 if __name__ == "__main__":
     run_sbert_baseline()

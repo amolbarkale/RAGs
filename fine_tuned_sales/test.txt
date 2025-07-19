@@ -1,0 +1,21 @@
+Sales Rep: Hi David, I wanted to follow up on your interest in our project management software.
+
+Customer: Yes, well, I attended your webinar last month. It was informative, but I'm not sure we really need to make a change.
+
+Sales Rep: What's your current setup like?
+
+Customer: We've been using our current system for about three years now, and honestly, it works pretty well for us. The team is comfortable with it.
+
+Sales Rep: I see. Are there any pain points or areas where you feel you could improve efficiency?
+
+Customer: Not really. I mean, every system has its quirks, but we've worked around them. The learning curve for a new system would probably outweigh any benefits.
+
+Sales Rep: That's understandable. What if I could show you how our solution could save you 20% on project completion times?
+
+Customer: I appreciate that, but we're pretty happy with our current productivity levels. Plus, we just renewed our annual license last month.
+
+Sales Rep: Ah, I see. Well, when does that contract expire?
+
+Customer: Not for another 11 months. And honestly, unless something major changes, we'll probably stick with what we have.
+
+Sales Rep: I understand. Thanks for your time, David.
