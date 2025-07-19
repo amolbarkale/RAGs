@@ -2,3 +2,5 @@ pandas
 matplotlib
 sentence-transformers
 scikit-learn
+streamlit
+joblib

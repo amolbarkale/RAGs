@@ -6,6 +6,7 @@ from sklearn.model_selection import train_test_split
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import classification_report
 from sentence_transformers import SentenceTransformer
+import joblib
 
 # Resolve paths relative to this file
 SCRIPT_DIR   = os.path.dirname(__file__)
@@ -43,6 +44,13 @@ def run_sbert_baseline():
     test_predictions = baseline_classifier.predict(test_embeddings)
     print("=== Baseline SBERT Classification Report ===")
     print(classification_report(test_labels, test_predictions))
+
+    os.makedirs(MODEL_DIR, exist_ok=True)
+    joblib.dump(
+        baseline_classifier,
+        os.path.join(MODEL_DIR, "clf_sbert_base.joblib")
+    )
+    print(f"✅ Saved SBERT classifier to models/clf_sbert_base.joblib")
 
 
 if __name__ == "__main__":
